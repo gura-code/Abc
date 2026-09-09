@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COSMIC-S // Full Body System v3</title>
+    <title>COSMIC-S // Full Body System v4</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -42,7 +42,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1); /* Specchio per il movimento naturale */
+            transform: scaleX(-1); /* Specchio per movimento naturale */
         }
     </style>
 </head>
@@ -58,51 +58,57 @@
         const canvasElement = document.getElementById('canvas');
         const canvasCtx = canvasElement.getContext('2d');
 
-        // Bersagli: Mano SX (Ciano), Mano DX (Rosa), Testa (Verde)
-        let targetLeft = { x: 300, y: 300, radius: 40, color: '#00E5FF' };
-        let targetRight = { x: 800, y: 300, radius: 40, color: '#FF3366' };
-        let targetHead = { x: 600, y: 200, radius: 35, color: '#00FF66' };
-
+        // Unico bersaglio attivo alla volta
+        let currentTarget = { x: 0, y: 0, radius: 45, type: 'left', color: '#00E5FF', label: 'MANO SX' };
         let particles = [];
 
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
-            resetTargets();
+            spawnNewTarget();
         }
         window.addEventListener('resize', resizeCanvas);
 
-        function resetTargets() {
+        function spawnNewTarget() {
             const w = canvasElement.width;
             const h = canvasElement.height;
-            // Posizioni logiche corrette (Mano sinistra a sinistra, mano destra a destra)
-            targetLeft.x = Math.random() * (w * 0.35) + 80;
-            targetLeft.y = Math.random() * (h * 0.5) + 150;
 
-            targetRight.x = Math.random() * (w * 0.35) + (w * 0.6);
-            targetRight.y = Math.random() * (h * 0.5) + 150;
+            // Scegli casualmente se colpire con Mano Sinistra (15), Mano Destra (16) o Testa (0)
+            const types = [
+                { type: 'left', color: '#00E5FF', landmark: 15, label: 'MANO SX' },
+                { type: 'right', color: '#FF3366', landmark: 16, label: 'MANO DX' },
+                { type: 'head', color: '#00FF66', landmark: 0, label: 'TESTA' }
+            ];
 
-            targetHead.x = Math.random() * (w * 0.4) + (w * 0.3);
-            targetHead.y = Math.random() * (h * 0.3) + 100;
+            const chosen = types[Math.floor(Math.random() * types.length)];
+            
+            currentTarget = {
+                x: Math.random() * (w * 0.6) + (w * 0.2),
+                y: Math.random() * (h * 0.5) + 120,
+                radius: 45,
+                type: chosen.type,
+                color: chosen.color,
+                landmark: chosen.landmark,
+                label: chosen.label
+            };
         }
 
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Disegna la webcam a schermo intero
+            // Disegna webcam a schermo intero
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
             if (results.poseLandmarks) {
                 drawAdvancedSkeleton(results.poseLandmarks);
 
-                // Landmark 15 = Mano Sinistra, 16 = Mano Destra, 0 = Naso/Testa
-                checkInteraction(results.poseLandmarks[15], targetLeft);
-                checkInteraction(results.poseLandmarks[16], targetRight);
-                checkInteraction(results.poseLandmarks[0], targetHead);
+                // Controlla l'interazione solo con il bersaglio attualmente attivo sullo schermo
+                const activeLandmark = results.poseLandmarks[currentTarget.landmark];
+                checkInteraction(activeLandmark, currentTarget);
             }
 
-            drawTargets();
+            drawActiveTarget();
             updateAndDrawParticles();
 
             canvasCtx.restore();
@@ -118,8 +124,8 @@
                 [23, 25], [25, 27], [24, 26], [26, 28]           // Gambe
             ];
 
-            canvasCtx.strokeStyle = 'rgba(0, 255, 102, 0.6)';
-            canvasCtx.lineWidth = 4;
+            canvasCtx.strokeStyle = 'rgba(0, 255, 102, 0.4)';
+            canvasCtx.lineWidth = 3;
 
             connections.forEach(([i, j]) => {
                 const p1 = landmarks[i];
@@ -131,30 +137,33 @@
                     canvasCtx.stroke();
                 }
             });
-
-            landmarks.forEach((p, idx) => {
-                if (p.visibility > 0.5 && idx >= 11) {
-                    canvasCtx.fillStyle = '#FFFFFF';
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(p.x * w, p.y * h, 4, 0, 2 * Math.PI);
-                    canvasCtx.fill();
-                }
-            });
         }
 
-        function drawTargets() {
-            [targetLeft, targetRight, targetHead].forEach(t => {
-                canvasCtx.strokeStyle = t.color;
-                canvasCtx.lineWidth = 4;
-                canvasCtx.beginPath();
-                canvasCtx.arc(t.x, t.y, t.radius, 0, 2 * Math.PI);
-                canvasCtx.stroke();
-                
-                canvasCtx.fillStyle = t.color === '#00E5FF' ? 'rgba(0, 229, 255, 0.25)' :
-                                      t.color === '#FF3366' ? 'rgba(255, 51, 102, 0.25)' : 
-                                                              'rgba(0, 255, 102, 0.25)';
-                canvasCtx.fill();
-            });
+        function drawActiveTarget() {
+            const w = canvasElement.width;
+            const h = canvasElement.height;
+
+            // Disegna il cerchio principale
+            canvasCtx.strokeStyle = currentTarget.color;
+            canvasCtx.lineWidth = 5;
+            canvasCtx.beginPath();
+            canvasCtx.arc(currentTarget.x, currentTarget.y, currentTarget.radius, 0, 2 * Math.PI);
+            canvasCtx.stroke();
+            
+            canvasCtx.fillStyle = currentTarget.color === '#00E5FF' ? 'rgba(0, 229, 255, 0.3)' :
+                                  currentTarget.color === '#FF3366' ? 'rgba(255, 51, 102, 0.3)' : 
+                                                                      'rgba(0, 255, 102, 0.3)';
+            canvasCtx.fill();
+
+            // Scritta grande al centro del bersaglio in modo che si legga anche da lontano
+            canvasCtx.save();
+            canvasCtx.scale(-1, 1); // Raddrizza il testo ribaltato dallo specchio della webcam
+            canvasCtx.font = 'bold 14px "Space Grotesk", sans-serif';
+            canvasCtx.fillStyle = '#FFFFFF';
+            canvasCtx.textAlign = 'center';
+            canvasCtx.textBaseline = 'middle';
+            canvasCtx.fillText(currentTarget.label, -currentTarget.x, currentTarget.y);
+            canvasCtx.restore();
         }
 
         function checkInteraction(bodyPart, target) {
@@ -167,20 +176,18 @@
 
             const dist = Math.hypot(pX - target.x, pY - target.y);
 
-            if (dist < target.radius + 20) {
+            if (dist < target.radius + 15) {
                 createParticles(target.x, target.y, target.color);
-                // Sposta il bersaglio colpito in una nuova posizione casuale
-                target.x = Math.random() * (w * 0.7) + (w * 0.15);
-                target.y = Math.random() * (h * 0.6) + 100;
+                spawnNewTarget(); // Crea subito un nuovo bersaglio casuale
             }
         }
 
         function createParticles(x, y, color) {
-            for (let i = 0; i < 18; i++) {
+            for (let i = 0; i < 20; i++) {
                 particles.push({
                     x: x, y: y,
-                    vx: (Math.random() - 0.5) * 10,
-                    vy: (Math.random() - 0.5) * 10,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12,
                     alpha: 1,
                     color: color
                 });
@@ -191,7 +198,7 @@
             particles.forEach((p, index) => {
                 p.x += p.vx;
                 p.y += p.vy;
-                p.alpha -= 0.035;
+                p.alpha -= 0.03;
 
                 if (p.alpha <= 0) {
                     particles.splice(index, 1);
