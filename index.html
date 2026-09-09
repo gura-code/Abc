@@ -2,17 +2,18 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retrolens Pro Customizer FX</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Retrolens Pro - Ultimate Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     
     <style>
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             padding: 0;
-            background-color: #050505;
+            background-color: #030303;
             color: #00ffcc;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
@@ -23,122 +24,20 @@
             align-items: center;
         }
 
-        /* --- SCHERMATA 1: CONFIGURAZIONE --- */
-        #setup-screen {
-            position: absolute;
-            width: 100vw;
-            height: 100vh;
-            background: #0a0a0a;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-            padding: 20px;
-            box-sizing: border-box;
-            overflow-y: auto;
-        }
-
-        .setup-card {
-            background: rgba(14, 14, 14, 0.95);
-            border: 1px solid rgba(0, 255, 204, 0.4);
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0, 255, 204, 0.15);
-            width: 100%;
-            max-width: 400px;
-            box-sizing: border-box;
-        }
-
-        .setup-card h2 {
-            margin-top: 0;
-            color: #ff007f;
-            text-align: center;
-            font-size: 18px;
-            letter-spacing: 2px;
-            margin-bottom: 20px;
-        }
-
-        .setup-group {
-            margin-bottom: 15px;
-        }
-
-        .setup-group label {
-            display: block;
-            font-size: 10px;
-            color: #aaa;
-            margin-bottom: 5px;
-            letter-spacing: 1px;
-        }
-
-        .btn {
-            background: rgba(0, 255, 204, 0.1);
-            border: 1px solid #00ffcc;
-            color: #00ffcc;
-            padding: 8px 12px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 11px;
-            cursor: pointer;
-            border-radius: 4px;
-            margin-right: 4px;
-            margin-bottom: 4px;
-            transition: all 0.2s;
-        }
-        .btn:hover, .btn.active {
-            background: #00ffcc;
-            color: #000;
-            font-weight: bold;
-        }
-
-        input[type="color"] {
-            border: 1px solid #00ffcc;
-            width: 40px;
-            height: 25px;
-            background: transparent;
-            cursor: pointer;
-            vertical-align: middle;
-        }
-
-        #start-camera-btn {
-            display: block;
-            width: 100%;
-            background: #ff007f;
-            border-color: #ff007f;
-            color: #fff;
-            font-weight: bold;
-            font-size: 14px;
-            padding: 12px;
-            margin-top: 25px;
-            text-align: center;
-            border-radius: 6px;
-            cursor: pointer;
-            letter-spacing: 1px;
-        }
-        #start-camera-btn:hover { background: #ff3399; }
-
-        /* --- SCHERMATA 2: FOTOCAMERA PULITA --- */
-        #camera-screen {
-            position: absolute;
-            width: 100vw;
-            height: 100vh;
-            background: #000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            z-index: 10;
-        }
-
-        /* Contenitore che rispetta le proporzioni (es. quadrato o 9:16) ma pulito */
-        #viewfinder-container {
+        #app-container {
             position: relative;
             width: 100vw;
             height: 100vh;
-            overflow: hidden;
             background: #000;
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
+        }
+
+        /* Video e Canvas perfettamente proporzionati senza distorsioni */
+        video.input_video {
+            display: none;
         }
 
         #output_canvas {
@@ -146,24 +45,101 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            z-index: 1;
         }
 
-        .mirrored {
+        #output_canvas.mirrored {
             transform: scaleX(-1);
         }
 
-        /* Pulsanti minimali in alto nella schermata fotocamera */
-        .camera-hud-top {
+        /* Overlay di stato in basso */
+        #status-hud {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid rgba(0, 255, 204, 0.4);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            z-index: 10;
+            pointer-events: none;
+            backdrop-filter: blur(5px);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* Pulsanti minimali in alto */
+        .top-hud {
             position: absolute;
             top: 15px;
             right: 15px;
-            z-index: 40;
+            z-index: 20;
             display: flex;
             gap: 8px;
         }
 
-        .mini-btn {
-            background: rgba(0, 0, 0, 0.6);
+        .hud-btn {
+            background: rgba(10, 10, 10, 0.8);
+            border: 1px solid #00ffcc;
+            color: #00ffcc;
+            padding: 8px 12px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 6px;
+            backdrop-filter: blur(5px);
+            font-weight: bold;
+        }
+        .hud-btn:hover { background: #00ffcc; color: #000; }
+
+        #download-btn {
+            display: none;
+            background: #ff007f;
+            border-color: #ff007f;
+            color: #fff;
+        }
+        #download-btn:hover { background: #ff3399; }
+
+        /* Pannello Impostazioni a comparsa */
+        #settings-panel {
+            position: absolute;
+            top: 0; right: -100%;
+            width: 100%; max-width: 360px;
+            height: 100%;
+            background: rgba(10, 10, 10, 0.96);
+            border-left: 1px solid rgba(0, 255, 204, 0.3);
+            z-index: 100;
+            padding: 25px;
+            transition: right 0.3s ease-in-out;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #settings-panel.open { right: 0; }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(0, 255, 204, 0.2);
+            padding-bottom: 10px;
+        }
+        .settings-header h3 { margin: 0; color: #ff007f; font-size: 15px; letter-spacing: 2px; }
+
+        .control-group { margin-bottom: 16px; }
+        .control-group label {
+            display: block;
+            font-size: 10px;
+            color: #aaa;
+            margin-bottom: 6px;
+            letter-spacing: 1px;
+        }
+
+        .option-btn {
+            background: rgba(0, 255, 204, 0.08);
             border: 1px solid #00ffcc;
             color: #00ffcc;
             padding: 6px 10px;
@@ -171,31 +147,44 @@
             font-size: 10px;
             cursor: pointer;
             border-radius: 4px;
-            backdrop-filter: blur(5px);
+            margin-right: 4px;
+            margin-bottom: 6px;
         }
-        .mini-btn:hover {
+        .option-btn.active, .option-btn:hover {
             background: #00ffcc;
             color: #000;
             font-weight: bold;
         }
 
-        #manual-download-btn {
-            display: none;
-            background: #ff007f;
-            border-color: #ff007f;
-            color: #fff;
-            font-weight: bold;
-        }
-        #manual-download-btn:hover {
-            background: #ff3399;
-            color: #fff;
+        input[type="color"] {
+            border: 1px solid #00ffcc;
+            width: 40px; height: 26px;
+            background: transparent;
+            cursor: pointer;
+            vertical-align: middle;
         }
 
+        /* Messaggio errore / caricamento iniziale */
+        #error-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #050505;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+        }
+        #error-overlay h2 { color: #ff007f; margin-bottom: 10px; font-size: 18px; }
+        #error-overlay p { font-size: 12px; color: #ccc; max-width: 320px; line-height: 1.5; margin-bottom: 20px; }
+        
         #countdown-overlay {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 120px;
+            font-size: 110px;
             font-weight: bold;
             color: #ff007f;
             text-shadow: 0 0 30px #ff007f;
@@ -213,69 +202,63 @@
             pointer-events: none;
             transition: opacity 0.3s ease-out;
         }
-
-        .input_video { display: none; }
     </style>
 </head>
 <body>
 
-    <!-- PAGINA 1: CONFIGURAZIONE -->
-    <div id="setup-screen">
-        <div class="setup-card">
-            <h2>RETROLENS PRO FX</h2>
-            
-            <div class="setup-group">
+    <!-- Schermata di errore / avvio in caso di problemi fotocamera -->
+    <div id="error-overlay">
+        <h2>RETROLENS PRO</h2>
+        <p id="error-msg">Inizializzazione della fotocamera in corso... Consenti l'accesso quando richiesto.</p>
+        <button class="hud-btn" id="retry-btn" onclick="initCamera()" style="display:none; padding: 10px 20px;">RIPROVA</button>
+    </div>
+
+    <div id="app-container">
+        <!-- HUD Superiore -->
+        <div class="top-hud">
+            <button class="hud-btn" id="download-btn" onclick="downloadImage()">💾 SALVA</button>
+            <button class="hud-btn" onclick="toggleSettings()">⚙️ MENU</button>
+        </div>
+
+        <div id="countdown-overlay">3</div>
+        <div id="flash-overlay"></div>
+
+        <video class="input_video" autoplay playsinline muted></video>
+        <canvas id="output_canvas" class="mirrored"></canvas>
+
+        <div id="status-hud">STATO: <span id="status-text">AVVIAMENTO...</span></div>
+
+        <!-- Pannello Impostazioni -->
+        <div id="settings-panel">
+            <div class="settings-header">
+                <h3>IMPOSTAZIONI</h3>
+                <button class="hud-btn" onclick="toggleSettings()">✕</button>
+            </div>
+
+            <div class="control-group">
                 <label>FOTOCAMERA:</label>
-                <button class="btn active" onclick="setCamera('user', this)">Frontale</button>
-                <button class="btn" onclick="setCamera('environment', this)">Retro</button>
+                <button class="option-btn active" onclick="setCamera('user', this)">Frontale</button>
+                <button class="option-btn" onclick="setCamera('environment', this)">Retro</button>
             </div>
 
-            <div class="setup-group">
+            <div class="control-group">
                 <label>EFFETTO SPECCHIO:</label>
-                <button class="btn active" onclick="setMirror(true, this)">Attivo</button>
-                <button class="btn" onclick="setMirror(false, this)">Disattivato</button>
+                <button class="option-btn active" onclick="setMirror(true, this)">Attivo</button>
+                <button class="option-btn" onclick="setMirror(false, this)">Disattivato</button>
             </div>
 
-            <div class="setup-group">
-                <label>FORMATO FOTO / FRAME:</label>
-                <button class="btn active" onclick="setAspectRatio('full', this)">Schermo Intero</button>
-                <button class="btn" onclick="setAspectRatio('1:1', this)">Quadrato (1:1)</button>
-                <button class="btn" onclick="setAspectRatio('9:16', this)">Verticale (9:16)</button>
-                <button class="btn" onclick="setAspectRatio('16:9', this)">Orizzontale (16:9)</button>
-                <button class="btn" onclick="setAspectRatio('4:3', this)">Classico (4:3)</button>
-            </div>
-
-            <div class="setup-group">
+            <div class="control-group">
                 <label>COLORE ELEMENTI:</label>
                 <input type="color" id="theme-color" value="#00ffcc" onchange="accentColor = this.value">
             </div>
 
-            <div class="setup-group">
-                <label>FILTRI:</label>
-                <button class="btn active" onclick="setMode('portal', this)">Finestra Colore</button>
-                <button class="btn" onclick="setMode('inverted', this)">Inverso</button>
-                <button class="btn" onclick="setMode('neon', this)">Neon</button>
-                <button class="btn" onclick="setMode('none', this)">Nessuno</button>
+            <div class="control-group">
+                <label>FILTRI EFFETTO:</label>
+                <button class="option-btn active" onclick="setMode('portal', this)">Finestra Colore</button>
+                <button class="option-btn" onclick="setMode('inverted', this)">Inverso</button>
+                <button class="option-btn" onclick="setMode('neon', this)">Neon</button>
+                <button class="option-btn" onclick="setMode('none', this)">Nessuno</button>
             </div>
-
-            <button id="start-camera-btn" onclick="goToCameraScreen()">VAI ALLA FOTOCAMERA 📷</button>
-        </div>
-    </div>
-
-    <!-- PAGINA 2: FOTOCAMERA PULITA -->
-    <div id="camera-screen">
-        <!-- Pulsanti minimali in alto a destra -->
-        <div class="camera-hud-top">
-            <button class="mini-btn" onclick="goToSetupScreen()">⚙️ Impostazioni</button>
-            <button class="mini-btn" id="manual-download-btn" onclick="downloadImageManually()">💾 Scarica Foto</button>
-        </div>
-
-        <div id="viewfinder-container">
-            <div id="countdown-overlay">3</div>
-            <div id="flash-overlay"></div>
-
-            <video class="input_video" autoplay playsinline muted></video>
-            <canvas id="output_canvas"></canvas>
         </div>
     </div>
 
@@ -283,102 +266,54 @@
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
+        const statusText = document.getElementById('status-text');
+        const errorOverlay = document.getElementById('error-overlay');
+        const errorMsg = document.getElementById('error-msg');
+        const retryBtn = document.getElementById('retry-btn');
+        const downloadBtn = document.getElementById('download-btn');
         const countdownEl = document.getElementById('countdown-overlay');
         const flashEl = document.getElementById('flash-overlay');
-        const container = document.getElementById('viewfinder-container');
-        const downloadBtn = document.getElementById('manual-download-btn');
-        
-        const setupScreen = document.getElementById('setup-screen');
-        const cameraScreen = document.getElementById('camera-screen');
+        const settingsPanel = document.getElementById('settings-panel');
 
         let currentMode = 'portal';
         let currentFacingMode = 'user';
-        let currentAspect = 'full';
         let isMirrored = true;
         let accentColor = '#00ffcc';
         let isCountingDown = false;
         let cameraInstance = null;
-        let lastCapturedDataUrl = null;
-        let isCameraRunning = false;
+        let lastCapturedUrl = null;
+
+        function toggleSettings() {
+            settingsPanel.classList.toggle('open');
+        }
 
         function setMode(mode, btn) {
             currentMode = mode;
-            document.querySelectorAll('.setup-group:nth-child(5) .btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#settings-panel .control-group:last-child .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
         }
 
         function setCamera(facing, btn) {
             currentFacingMode = facing;
-            document.querySelectorAll('.setup-group:nth-child(1) .btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#settings-panel .control-group:nth-child(1) .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
-            if(isCameraRunning) restartCamera();
+            initCamera();
         }
 
         function setMirror(mirrorState, btn) {
             isMirrored = mirrorState;
-            document.querySelectorAll('.setup-group:nth-child(2) .btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#settings-panel .control-group:nth-child(2) .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
-            
-            if (isMirrored) {
-                canvasElement.classList.add('mirrored');
-            } else {
-                canvasElement.classList.remove('mirrored');
-            }
-        }
-
-        function setAspectRatio(aspect, btn) {
-            currentAspect = aspect;
-            document.querySelectorAll('.setup-group:nth-child(3) .btn').forEach(b => b.classList.remove('active'));
-            if(btn) btn.classList.add('active');
-            updateContainerSize();
-        }
-
-        function updateContainerSize() {
-            if (currentAspect === 'full') {
-                container.style.width = '100vw';
-                container.style.height = '100vh';
-            } else if (currentAspect === '1:1') {
-                const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
-                container.style.width = size + 'px';
-                container.style.height = size + 'px';
-            } else if (currentAspect === '9:16') {
-                container.style.height = '90vh';
-                container.style.width = (window.innerHeight * 0.9 * 9 / 16) + 'px';
-            } else if (currentAspect === '16:9') {
-                container.style.width = '90vw';
-                container.style.height = (window.innerWidth * 0.9 * 9 / 16) + 'px';
-            } else if (currentAspect === '4:3') {
-                container.style.width = '85vw';
-                container.style.height = (window.innerWidth * 0.85 * 3 / 4) + 'px';
-            }
-            resizeCanvas();
+            if (isMirrored) canvasElement.classList.add('mirrored');
+            else canvasElement.classList.remove('mirrored');
         }
 
         function resizeCanvas() {
-            canvasElement.width = container.clientWidth * window.devicePixelRatio;
-            canvasElement.height = container.clientHeight * window.devicePixelRatio;
+            canvasElement.width = window.innerWidth * window.devicePixelRatio;
+            canvasElement.height = window.innerHeight * window.devicePixelRatio;
         }
-
-        window.addEventListener('resize', () => {
-            if(isCameraRunning) updateContainerSize();
-        });
-
-        function goToCameraScreen() {
-            setupScreen.style.display = 'none';
-            cameraScreen.style.display = 'flex';
-            isCameraRunning = true;
-            updateContainerSize();
-            restartCamera();
-        }
-
-        function goToSetupScreen() {
-            if (cameraInstance) {
-                cameraInstance.stop();
-            }
-            isCameraRunning = false;
-            cameraScreen.style.display = 'none';
-            setupScreen.style.display = 'flex';
-        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         function triggerCapture() {
             if (isCountingDown) return;
@@ -387,11 +322,13 @@
             let count = 3;
             countdownEl.style.display = 'block';
             countdownEl.innerText = count;
+            statusText.innerText = `ATTENDI (${count})...`;
 
             let timer = setInterval(() => {
                 count--;
                 if (count > 0) {
                     countdownEl.innerText = count;
+                    statusText.innerText = `ATTENDI (${count})...`;
                 } else {
                     clearInterval(timer);
                     countdownEl.style.display = 'none';
@@ -399,37 +336,35 @@
                     flashEl.style.opacity = '1';
                     setTimeout(() => { flashEl.style.opacity = '0'; }, 300);
 
-                    setTimeout(() => {
-                        // Cattura pulita esattamente del riquadro visibile (rispetta il formato scelto senza scritte)
-                        lastCapturedDataUrl = canvasElement.toDataURL('image/png', 1.0);
-                        
-                        const link = document.createElement('a');
-                        link.href = lastCapturedDataUrl;
-                        link.download = `retrolens-pro-${Date.now()}.png`;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                    statusText.innerText = "FOTO SCATTATA!";
+                    
+                    // Screenshot fedele al 100% di ciò che si vede sullo schermo
+                    lastCapturedUrl = canvasElement.toDataURL('image/png', 1.0);
+                    
+                    const link = document.createElement('a');
+                    link.href = lastCapturedUrl;
+                    link.download = `retrolens-${Date.now()}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
 
-                        downloadBtn.style.display = 'inline-block';
-                        isCountingDown = false;
-                    }, 400);
+                    downloadBtn.style.display = 'block';
+                    setTimeout(() => { isCountingDown = false; }, 2000);
                 }
             }, 1000);
         }
 
-        function downloadImageManually() {
-            if (!lastCapturedDataUrl) return;
+        function downloadImage() {
+            if (!lastCapturedUrl) return;
             const link = document.createElement('a');
-            link.href = lastCapturedDataUrl;
-            link.download = `retrolens-pro-${Date.now()}.png`;
+            link.href = lastCapturedUrl;
+            link.download = `retrolens-${Date.now()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
         function onResults(results) {
-            if (!isCameraRunning) return;
-
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -438,22 +373,22 @@
                 return;
             }
 
-            const scaleX = canvasElement.width;
-            const scaleY = canvasElement.height;
+            const w = canvasElement.width;
+            const h = canvasElement.height;
 
-            // Sfondo in bianco e nero
-            canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
-            canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
+            // Sfondo in bianco e nero nitido
+            canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(85%)';
+            canvasCtx.drawImage(results.image, 0, 0, w, h);
             canvasCtx.filter = 'none';
 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2 && results.multiHandedness) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
                 let leftHand = null;
                 let rightHand = null;
 
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-                    const landmarks = results.multiHandLandmarks[i];
-                    const avgX = landmarks.reduce((acc, pt) => acc + pt.x, 0) / landmarks.length;
-                    if (avgX < 0.5) { leftHand = landmarks; } else { rightHand = landmarks; }
+                    const lm = results.multiHandLandmarks[i];
+                    const avgX = lm.reduce((acc, pt) => acc + pt.x, 0) / lm.length;
+                    if (avgX < 0.5) { leftHand = lm; } else { rightHand = lm; }
                 }
 
                 if (!leftHand || !rightHand) {
@@ -461,19 +396,25 @@
                     rightHand = results.multiHandLandmarks[1];
                 }
 
+                // Controllo distanza pizzico (indice + pollice)
                 const distLeft = Math.hypot(leftHand[4].x - leftHand[8].x, leftHand[4].y - leftHand[8].y);
                 const distRight = Math.hypot(rightHand[4].x - rightHand[8].x, rightHand[4].y - rightHand[8].y);
 
-                const pinchThreshold = 0.055;
+                const pinchThreshold = 0.06;
                 if (distLeft < pinchThreshold && distRight < pinchThreshold && !isCountingDown) {
                     triggerCapture();
                 }
 
-                const l_index = { x: leftHand[8].x * scaleX, y: leftHand[8].y * scaleY };
-                const l_thumb = { x: leftHand[4].x * scaleX, y: leftHand[4].y * scaleY };
-                const r_index = { x: rightHand[8].x * scaleX, y: rightHand[8].y * scaleY };
-                const r_thumb = { x: rightHand[4].x * scaleX, y: rightHand[4].y * scaleY };
+                if (!isCountingDown) {
+                    statusText.innerText = "PRONTO - UNISCI I PUNTI CON LE 2 MANI";
+                }
 
+                const l_index = { x: leftHand[8].x * w, y: leftHand[8].y * h };
+                const l_thumb = { x: leftHand[4].x * w, y: leftHand[4].y * h };
+                const r_index = { x: rightHand[8].x * w, y: rightHand[8].y * h };
+                const r_thumb = { x: rightHand[4].x * w, y: rightHand[4].y * h };
+
+                // Maschera Portale
                 canvasCtx.save();
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(l_index.x, l_index.y);
@@ -484,7 +425,7 @@
                 canvasCtx.clip();
 
                 if (currentMode === 'portal') {
-                    canvasCtx.filter = 'saturate(180%) contrast(120%)';
+                    canvasCtx.filter = 'saturate(200%) contrast(120%)';
                 } else if (currentMode === 'inverted') {
                     canvasCtx.filter = 'invert(100%) saturate(200%)';
                 } else if (currentMode === 'neon') {
@@ -493,13 +434,13 @@
                     canvasCtx.filter = 'none';
                 }
                 
-                canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
+                canvasCtx.drawImage(results.image, 0, 0, w, h);
                 canvasCtx.restore();
 
                 // Cornice del portale
                 canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
-                canvasCtx.shadowBlur = 20;
+                canvasCtx.shadowBlur = 15;
                 canvasCtx.shadowColor = accentColor;
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(l_index.x, l_index.y);
@@ -508,8 +449,9 @@
                 canvasCtx.lineTo(l_thumb.x, l_thumb.y);
                 canvasCtx.closePath();
                 canvasCtx.stroke();
+                canvasCtx.shadowBlur = 0;
 
-                // Linee interne geometriche
+                // Linee geometriche interne
                 canvasCtx.strokeStyle = '#ffffff';
                 canvasCtx.lineWidth = 2;
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
@@ -517,11 +459,16 @@
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(l_index.x, l_index.y); canvasCtx.stroke();
                 canvasCtx.beginPath(); canvasCtx.moveTo(r_thumb.x, r_thumb.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
 
-                // Scheletro delle mani visibile anche nello scatto
+                // Scheletro completo delle mani visibile anche nella foto finale
                 [leftHand, rightHand].forEach(hand => {
                     drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: accentColor, lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 1, radius: 2});
                 });
+
+            } else {
+                if (!isCountingDown) {
+                    statusText.innerText = "MOSTRA 🐺 ENTRAMBE LE MANI ALLA CAMERA";
+                }
             }
 
             canvasCtx.restore();
@@ -534,30 +481,42 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
         });
 
         hands.onResults(onResults);
 
-        function restartCamera() {
+        async function initCamera() {
+            errorMsg.innerText = "Avvio fotocamera in corso...";
+            retryBtn.style.display = 'none';
+            
             if (cameraInstance) {
-                cameraInstance.stop();
+                try { cameraInstance.stop(); } catch(e) {}
             }
-            cameraInstance = new Camera(videoElement, {
-                onFrame: async () => {
-                    if(isCameraRunning) {
+
+            try {
+                cameraInstance = new Camera(videoElement, {
+                    onFrame: async () => {
                         await hands.send({ image: videoElement });
-                    }
-                },
-                width: 1920,
-                height: 1080,
-                facingMode: currentFacingMode
-            });
-            cameraInstance.start();
+                    },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: currentFacingMode
+                });
+                
+                await cameraInstance.start();
+                errorOverlay.style.display = 'none';
+            } catch (err) {
+                console.error("Errore fotocamera:", err);
+                errorMsg.innerText = "Impossibile accedere alla fotocamera. Assicurati di aver dato i permessi e di non avere altre app che la stanno utilizzando.\n\nDettaglio: " + err.message;
+                retryBtn.style.display = 'inline-block';
+                errorOverlay.style.display = 'flex';
+            }
         }
 
-        setMirror(true, null);
+        // Avvio automatico al caricamento della pagina
+        initCamera();
     </script>
 </body>
 </html>
