@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retrolens Mirrored Finger Mesh</title>
+    <title>Retrolens Pinch-to-Snap FX</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -30,7 +30,6 @@
             border-radius: 6px;
             z-index: 20;
             box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
-            /* Manteniamo l'HUD dritto e leggibile anche se il canvas è specchiato */
             transform: scaleX(1); 
         }
 
@@ -52,13 +51,36 @@
             font-weight: bold;
         }
 
+        /* Overlay countdown & flash */
+        #countdown-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 120px;
+            font-weight: bold;
+            color: #ff007f;
+            text-shadow: 0 0 30px #ff007f;
+            z-index: 30;
+            display: none;
+            pointer-events: none;
+        }
+
+        #flash-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: white;
+            z-index: 40;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-out;
+        }
+
         .input_video { display: none; }
 
         #output_canvas {
             position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            /* RIBALTAMENTO TOTALE: Effetto specchio naturale per l'utente */
             transform: scaleX(-1);
             z-index: 2;
         }
@@ -67,14 +89,17 @@
 <body>
 
     <div class="hud-top">
-        <h4>MIRRORED FINGER MESH FX</h4>
-        <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">MODALITÀ: <span style="color: #00ffcc;">FINESTRA A COLORI</span></div>
+        <h4>PINCH TO SNAP FX</h4>
+        <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">STATO: <span style="color: #00ffcc;">PRONTO (FAI IL PIZZICO)</span></div>
         <div>
             <button class="filter-btn active" onclick="setMode('portal')">Finestra Colore</button>
             <button class="filter-btn" onclick="setMode('inverted')">Portale Inverso</button>
             <button class="filter-btn" onclick="setMode('neon')">Neon Cyber</button>
         </div>
     </div>
+
+    <div id="countdown-overlay">3</div>
+    <div id="flash-overlay"></div>
 
     <video class="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
@@ -83,25 +108,71 @@
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
+        const countdownEl = document.getElementById('countdown-overlay');
+        const flashEl = document.getElementById('flash-overlay');
 
         let currentMode = 'portal';
+        let isCountingDown = false;
+        let lastLatestResults = null; // Memorizza l'ultimo frame per l'alta risoluzione
 
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             let desc = mode === 'portal' ? 'Finestra Colore' : (mode === 'inverted' ? 'Portale Inverso' : 'Neon Cyber');
-            document.getElementById('status-text').innerHTML = `MODALITÀ: <span style="color: #00ffcc;">${desc.toUpperCase()}</span>`;
         }
 
         function resizeCanvas() {
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
+            // Impostiamo la risoluzione interna del canvas a una definizione alta (es. 1920x1080 o dimensioni native video)
+            canvasElement.width = window.innerWidth * window.devicePixelRatio;
+            canvasElement.height = window.innerHeight * window.devicePixelRatio;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
+        function triggerCapture() {
+            if (isCountingDown) return;
+            isCountingDown = true;
+            
+            let count = 3;
+            countdownEl.style.display = 'block';
+            countdownEl.innerText = count;
+            document.getElementById('status-text').innerHTML = `STATO: <span style="color: #ff007f;">ATTendi (${count})...</span>`;
+
+            let timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.innerText = count;
+                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: #ff007f;">ATTendi (${count})...</span>`;
+                } else {
+                    clearInterval(timer);
+                    countdownEl.style.display = 'none';
+                    
+                    // Effetto Flash
+                    flashEl.style.opacity = '1';
+                    setTimeout(() => { flashEl.style.opacity = '0'; }, 300);
+
+                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: #00ffcc;">FOTO SCATTATA!</span>`;
+
+                    // Creazione immagine in alta risoluzione dal canvas principale
+                    setTimeout(() => {
+                        takeHighResDownload();
+                        isCountingDown = false;
+                    }, 400);
+                }
+            }, 1000);
+        }
+
+        function takeHighResDownload() {
+            // Crea un link temporaneo per il download automatico dell'alta risoluzione
+            const link = document.createElement('a');
+            link.download = `retrolens-snap-${Date.now()}.png`;
+            link.href = canvasElement.toDataURL('image/png', 1.0);
+            link.click();
+        }
+
         function onResults(results) {
+            lastLatestResults = results;
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -110,12 +181,15 @@
                 return;
             }
 
+            // Scala il contesto in base al pixel ratio per massima nitidezza
+            const scaleX = canvasElement.width;
+            const scaleY = canvasElement.height;
+
             // 1. Sfondo in bianco e nero
             canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
             canvasCtx.filter = 'none';
 
-            // 2. Controllo delle mani con orientamento naturale
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2 && results.multiHandedness) {
                 let leftHand = null;
                 let rightHand = null;
@@ -136,10 +210,19 @@
                     rightHand = results.multiHandLandmarks[1];
                 }
 
-                const l_index = { x: leftHand[8].x * canvasElement.width, y: leftHand[8].y * canvasElement.height };
-                const l_thumb = { x: leftHand[4].x * canvasElement.width, y: leftHand[4].y * canvasElement.height };
-                const r_index = { x: rightHand[8].x * canvasElement.width, y: rightHand[8].y * canvasElement.height };
-                const r_thumb = { x: rightHand[4].x * canvasElement.width, y: rightHand[4].y * canvasElement.height };
+                // Controllo distanza pizzico (Indice 8 e Pollice 4) su entrambe le mani
+                const distLeft = Math.hypot(leftHand[4].x - leftHand[8].x, leftHand[4].y - leftHand[8].y);
+                const distRight = Math.hypot(rightHand[4].x - rightHand[8].x, rightHand[4].y - rightHand[8].y);
+
+                const pinchThreshold = 0.055; // Soglia per considerare il pizzico chiuso
+                if (distLeft < pinchThreshold && distRight < pinchThreshold && !isCountingDown) {
+                    triggerCapture();
+                }
+
+                const l_index = { x: leftHand[8].x * scaleX, y: leftHand[8].y * scaleY };
+                const l_thumb = { x: leftHand[4].x * scaleX, y: leftHand[4].y * scaleY };
+                const r_index = { x: rightHand[8].x * scaleX, y: rightHand[8].y * scaleY };
+                const r_thumb = { x: rightHand[4].x * scaleX, y: rightHand[4].y * scaleY };
 
                 canvasCtx.save();
                 canvasCtx.beginPath();
@@ -159,14 +242,14 @@
                     canvasCtx.filter = 'hue-rotate(120deg) saturate(300%) contrast(150%)';
                 }
                 
-                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
                 canvasCtx.restore();
 
-                // 3. Cornice wireframe ed evidenziazione dei collegamenti
-                canvasCtx.strokeStyle = '#00ffcc';
-                canvasCtx.lineWidth = 3;
-                canvasCtx.shadowBlur = 18;
-                canvasCtx.shadowColor = '#00ffcc';
+                // 3. Cornice wireframe ed evidenziazione collegamenti
+                canvasCtx.strokeStyle = (distLeft < pinchThreshold && distRight < pinchThreshold) ? '#ff007f' : '#00ffcc';
+                canvasCtx.lineWidth = 4;
+                canvasCtx.shadowBlur = 20;
+                canvasCtx.shadowColor = canvasCtx.strokeStyle;
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(l_index.x, l_index.y);
                 canvasCtx.lineTo(r_index.x, r_index.y);
@@ -177,28 +260,26 @@
 
                 canvasCtx.strokeStyle = '#ff007f';
                 canvasCtx.lineWidth = 2;
-                // Indice <-> Indice
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
-                // Pollice <-> Pollice
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(r_thumb.x, r_thumb.y); canvasCtx.stroke();
-                // Pollice <-> Indice (mano sinistra)
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(l_index.x, l_index.y); canvasCtx.stroke();
-                // Pollice <-> Indice (mano destra)
                 canvasCtx.beginPath(); canvasCtx.moveTo(r_thumb.x, r_thumb.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
 
-                // Scheletro delle mani
                 [leftHand, rightHand].forEach(hand => {
                     drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.3)', lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ff007f', lineWidth: 1, radius: 2});
                 });
 
             } else {
+                if (!isCountingDown) {
+                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: #00ffcc;">AVVICINA LE MANI E FAI IL PIZZICO</span>`;
+                }
                 canvasCtx.fillStyle = '#00ffcc';
-                canvasCtx.font = '15px Courier New';
+                canvasCtx.font = '16px Courier New';
                 canvasCtx.textAlign = 'center';
                 canvasCtx.shadowBlur = 10;
                 canvasCtx.shadowColor = '#00ffcc';
-                canvasCtx.fillText("AVVICINA INDICI E POLLICI DI ENTRAMBE LE MANI", canvasElement.width / 2, canvasElement.height - 50);
+                canvasCtx.fillText("UNISCI INDICE E POLLICE SU ENTRAMBE LE MANI PER SCATTARE", scaleX / 2, scaleY - 60);
             }
 
             canvasCtx.restore();
@@ -211,8 +292,8 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.65
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
         });
 
         hands.onResults(onResults);
@@ -221,8 +302,8 @@
             onFrame: async () => {
                 await hands.send({ image: videoElement });
             },
-            width: 1280,
-            height: 720,
+            width: 1920,
+            height: 1080,
             facingMode: 'user'
         });
         camera.start();
