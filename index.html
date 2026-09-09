@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hand Fireworks / Sparkles Effect</title>
+    <title>Air Canvas - Disegna con le Dita</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -12,28 +12,14 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #000;
-            color: #ffaa00;
+            background-color: #111;
+            color: #fff;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
         }
 
-        .hud-panel {
-            position: absolute;
-            border: 1px solid rgba(255, 170, 0, 0.4);
-            background: rgba(10, 5, 0, 0.85);
-            padding: 10px 15px;
-            font-size: 12px;
-            letter-spacing: 1px;
-            z-index: 10;
-            pointer-events: none;
-            box-shadow: 0 0 10px rgba(255, 170, 0, 0.2);
-        }
-
-        #top-left { top: 20px; left: 20px; }
-        
         .input_video {
             position: absolute;
             top: 0;
@@ -42,11 +28,12 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(-1);
-            opacity: 0.2;
+            opacity: 0.15;
             z-index: 1;
         }
 
-        #output_canvas {
+        /* Canvas per i disegni salvati */
+        #paint_canvas {
             position: absolute;
             top: 0;
             left: 0;
@@ -56,164 +43,184 @@
             z-index: 2;
         }
 
+        /* Canvas per la webcam / UI interattiva */
+        #output_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+            z-index: 3;
+            pointer-events: none;
+        }
+
         #instruction {
             position: absolute;
-            bottom: 40px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 16px;
+            font-size: 14px;
             letter-spacing: 2px;
-            color: #ffcc00;
-            text-shadow: 0 0 10px #ff6600;
-            z-index: 20;
-            text-align: center;
+            color: #00ffcc;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 16px;
+            border: 1px solid #00ffcc;
+            border-radius: 4px;
+            z-index: 10;
             pointer-events: none;
         }
     </style>
 </head>
 <body>
 
-    <div id="top-left" class="hud-panel">
-        EFFETTO: <span id="effect-status" style="color: #ffaa00;">ATTESA PUGNO...</span>
-    </div>
-
-    <div id="instruction">CHIUDI LA MANO E APRI DI SCATTO PER I FUOCHI D'ARTIFICIO!</div>
+    <div id="instruction">USA L'INDICE PER MUOVERTI • PIZZICO PER DISEGNARE • TOCCA I COLORI A SINISTRA</div>
 
     <video class="input_video" autoplay playsinline muted></video>
+    <!-- Canvas sottostante dove rimane impresso il disegno -->
+    <canvas id="paint_canvas"></canvas>
+    <!-- Canvas superiore per la mano e la palette colori -->
     <canvas id="output_canvas"></canvas>
 
     <script>
         const videoElement = document.querySelector('.input_video');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const effectStatus = document.getElementById('effect-status');
-        const instruction = document.getElementById('instruction');
+        const paintCanvas = document.getElementById('paint_canvas');
+        const paintCtx = paintCanvas.getContext('2d');
+        const outputCanvas = document.getElementById('output_canvas');
+        const outputCtx = outputCanvas.getContext('2d');
 
-        function resizeCanvas() {
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
+        function resizeCanvases() {
+            paintCanvas.width = window.innerWidth;
+            paintCanvas.height = window.innerHeight;
+            outputCanvas.width = window.innerWidth;
+            outputCanvas.height = window.innerHeight;
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
 
-        // Sistema di particelle per i fuochi d'artificio
-        let particles = [];
-        let wasClosed = false; // Tiene traccia se prima la mano era chiusa
+        // Lista dei colori e della gomma (ordinate in verticale a sinistra)
+        const palette = [
+            { name: "Rosso", color: "#ff3333", x: 30, y: 50, size: 40 },
+            { name: "Arancione", color: "#ff9900", x: 30, y: 110, size: 40 },
+            { name: "Giallo", color: "#ffff33", x: 30, y: 170, size: 40 },
+            { name: "Verde", color: "#33cc33", x: 30, y: 230, size: 40 },
+            { name: "Blu", color: "#3333ff", x: 30, y: 290, size: 40 },
+            { name: "Viola", color: "#9933ff", x: 30, y: 350, size: 40 },
+            { name: "Bianco", color: "#ffffff", x: 30, y: 410, size: 40 },
+            { name: "Gomma", color: "#000000", x: 30, y: 470, size: 40, isEraser: true }
+        ];
 
-        class Particle {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                // Velocità casuale in tutte le direzioni per l'esplosione
-                const angle = Math.random() * Math.PI * 2;
-                const speed = Math.random() * 12 + 4;
-                this.vx = Math.cos(angle) * speed;
-                this.vy = Math.sin(angle) * speed;
-                this.alpha = 1;
-                this.decay = Math.random() * 0.02 + 0.015; // Velocità di sbiadimento
-                this.color = ['#ff3300', '#ffcc00', '#ffffff', '#ff00aa', '#00ffff'][Math.floor(Math.random() * 5)];
-                this.size = Math.random() * 4 + 2;
-            }
-
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vy += 0.2; // Piccolo effetto gravità verso il basso
-                this.alpha -= this.decay;
-            }
-
-            draw(ctx) {
-                ctx.save();
-                ctx.globalAlpha = Math.max(this.alpha, 0);
-                ctx.fillStyle = this.color;
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            }
-        }
-
-        // Calcola la distanza media delle dita dal polso (punto 0) per capire se la mano è aperta o chiusa
-        function getHandSpread(landmarks) {
-            const wrist = landmarks[0];
-            let totalDist = 0;
-            // Punte delle dita: indice(8), medio(12), anulare(16), mignolo(20)
-            const tips = [8, 12, 16, 20];
-            tips.forEach(tipIdx => {
-                const dx = landmarks[tipIdx].x - wrist.x;
-                const dy = landmarks[tipIdx].y - wrist.y;
-                totalDist += Math.hypot(dx, dy);
-            });
-            return totalDist / 4;
-        }
+        let currentColor = "#ff3333";
+        let isEraserActive = false;
+        let brushSize = 8;
+        let lastX = null;
+        let lastY = null;
+        let isDrawing = false;
 
         function onResults(results) {
-            canvasCtx.save();
-            // Pulisce lo schermo mantenendo una scia leggermente fluida
-            canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+            outputCtx.save();
+            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+            // Disegna la palette dei colori sulla sinistra
+            palette.forEach(item => {
+                outputCtx.beginPath();
+                outputCtx.arc(item.x, item.y, item.size / 2, 0, Math.PI * 2);
+                outputCtx.fillStyle = item.color;
+                outputCtx.fill();
+                outputCtx.lineWidth = 3;
+                outputCtx.strokeStyle = (currentColor === item.color || (item.isEraser && isEraserActive)) ? "#00ffcc" : "#ffffff";
+                outputCtx.stroke();
+                outputCtx.closePath();
+
+                // Etichetta testuale del colore
+                outputCtx.fillStyle = "#ffffff";
+                outputCtx.font = "11px Courier New";
+                outputCtx.fillText(item.name, item.x + 30, item.y + 4);
+            });
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
 
-                // Disegno della mano stilizzato oro/arancio
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(255, 170, 0, 0.4)', lineWidth: 2});
-                drawLandmarks(canvasCtx, landmarks, {color: '#ffaa00', lineWidth: 1, radius: 2});
+                // Coordinate dell'indice (punto 8) e del pollice (punto 4)
+                // Nota: poiché il canvas è specchiato via CSS, gestiamo le coordinate di conseguenza
+                const indexX = (1 - landmarks[8].x) * window.innerWidth;
+                const indexY = landmarks[8].y * window.innerHeight;
+                const thumbX = (1 - landmarks[4].x) * window.innerWidth;
+                const thumbY = landmarks[4].y * window.innerHeight;
 
-                // Misuriamo l'apertura della mano
-                const spread = getHandSpread(landmarks);
-                
-                // Centro del palmo (approssimativo usando la media tra polso 0 e nocche centrali)
-                const palmX = (1 - landmarks[9].x) * window.innerWidth;
-                const palmY = landmarks[9].y * window.innerHeight;
+                // Calcola la distanza tra pollice e indice per il "pizzico"
+                const pinchDist = Math.hypot(indexX - thumbX, indexY - thumbY);
+                const isPinched = pinchDist < 40; // Soglia per considerare il pizzico attivo
 
-                // Soglie per determinare se è pugno o aperta
-                // (I valori possono variare leggermente in base alla distanza dalla webcam)
-                const isClosed = spread < 0.28; 
-                const isOpen = spread > 0.38;
+                // Disegna il cursore sulla punta dell'indice
+                outputCtx.beginPath();
+                outputCtx.arc(indexX, indexY, 8, 0, Math.PI * 2);
+                outputCtx.fillStyle = isPinched ? "#00ffcc" : currentColor;
+                outputCtx.fill();
+                outputCtx.lineWidth = 2;
+                outputCtx.strokeStyle = "#ffffff";
+                outputCtx.stroke();
 
-                if (isClosed) {
-                    wasClosed = true;
-                    effectStatus.innerText = "PUGN0 CHIUSO - CARICAMENTO...";
-                    effectStatus.style.color = "#ff3300";
-                }
-
-                // Se prima era chiusa e ora si apre di scatto -> BOOM! Fuochi d'artificio
-                if (wasClosed && isOpen) {
-                    effectStatus.innerText = "BOOM! FUOCHI ATTIVATI!";
-                    effectStatus.style.color = "#00ffcc";
-                    instruction.innerText = "✨ SPETTACOLO ESPLOSIVO! ✨";
-
-                    // Genera tantissime particelle al centro del palmo
-                    for (let i = 0; i < 70; i++) {
-                        particles.push(new Particle(palmX, palmY));
+                // Controllo se l'utente sta selezionando un colore dalla palette
+                let selectingColor = false;
+                palette.forEach(item => {
+                    const distToPalette = Math.hypot(indexX - item.x, indexY - item.y);
+                    if (distToPalette < item.size / 2) {
+                        selectingColor = true;
+                        // Se fa il pizzico sul colore, lo seleziona
+                        if (isPinched) {
+                            if (item.isEraser) {
+                                isEraserActive = true;
+                            } else {
+                                isEraserActive = false;
+                                currentColor = item.color;
+                            }
+                        }
                     }
+                });
 
-                    wasClosed = false; // Reset dello stato finché non chiudi di nuovo
-                } else if (!isClosed && !wasClosed) {
-                    effectStatus.innerText = "MANA STABILE";
-                    effectStatus.style.color = "#ffaa00";
-                    instruction.innerText = "CHIUDI LA MANO E APRI DI SCATTO";
+                // Se non sta selezionando i colori ed è in modalità pizzico, disegna!
+                if (isPinched && !selectingColor) {
+                    if (!isDrawing) {
+                        // Inizia un nuovo tratto
+                        isDrawing = true;
+                        lastX = indexX;
+                        lastY = indexY;
+                    } else {
+                        // Disegna la linea sul canvas persistente
+                        paintCtx.beginPath();
+                        paintCtx.moveTo(lastX, lastY);
+                        paintCtx.lineTo(indexX, indexY);
+                        
+                        if (isEraserActive) {
+                            paintCtx.strokeStyle = "#000000";
+                            paintCtx.lineWidth = 35; // Gomma più larga
+                            paintCtx.globalCompositeOperation = "destination-out"; // Cancella realmente
+                        } else {
+                            paintCtx.strokeStyle = currentColor;
+                            paintCtx.lineWidth = brushSize;
+                            paintCtx.globalCompositeOperation = "source-over";
+                        }
+                        
+                        paintCtx.lineCap = "round";
+                        paintCtx.lineJoin = "round";
+                        paintCtx.stroke();
+                        paintCtx.closePath();
+
+                        lastX = indexX;
+                        lastY = indexY;
+                    }
+                } else {
+                    isDrawing = false;
+                    lastX = null;
+                    lastY = null;
                 }
 
             } else {
-                effectStatus.innerText = "IN ATTESA DI MANO...";
-                effectStatus.style.color = "#888888";
-                instruction.innerText = "MOSTRA LA MANO ALLA WEBCAM";
+                isDrawing = false;
             }
 
-            // Aggiorna e Disegna tutte le particelle attive
-            for (let i = particles.length - 1; i >= 0; i--) {
-                particles[i].update();
-                particles[i].draw(canvasCtx);
-                if (particles[i].alpha <= 0) {
-                    particles.splice(i, 1);
-                }
-            }
-
-            canvasCtx.restore();
+            outputCtx.restore();
         }
 
         const hands = new Hands({
