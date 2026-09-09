@@ -3,279 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Air Canvas - Sicuro e Funzionante</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <title>COSMIC-S // Full Body Tracking</title>
     
+    <!-- Google Fonts & MediaPipe Pose -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
     <style>
+        :root {
+            --bg-color: #0E0E0E;
+            --accent-color: #00FF66;
+            --text-color: #F0F0F0;
+            --panel-bg: rgba(20, 20, 20, 0.85);
+        }
+
         body {
             margin: 0;
             padding: 0;
-            background-color: #111;
-            color: #fff;
-            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Space Grotesk', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
             overflow: hidden;
-            width: 100vw;
-            height: 100vh;
         }
 
-        .input_video {
+        .container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 600px;
+            border: 2px solid #222;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        video {
+            display: none;
+        }
+
+        canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-            opacity: 0.3;
-            z-index: 1;
+            transform: scaleX(-1); /* Effetto specchio */
         }
 
-        #paint_canvas {
+        .hud {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-            z-index: 2;
-        }
-
-        #output_canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-            z-index: 3;
-            pointer-events: none;
-        }
-
-        #instruction {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 14px;
-            letter-spacing: 2px;
-            color: #00ffcc;
-            background: rgba(0, 0, 0, 0.85);
-            padding: 10px 20px;
-            border: 1px solid #00ffcc;
-            border-radius: 4px;
+            top: 20px;
+            left: 20px;
+            background: var(--panel-bg);
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            backdrop-filter: blur(5px);
             z-index: 10;
-            pointer-events: none;
-            text-align: center;
+        }
+
+        .hud h1 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            letter-spacing: 1px;
+            color: var(--accent-color);
+        }
+
+        .hud p {
+            margin: 0;
+            font-size: 14px;
+            color: #AAA;
+        }
+
+        .score-board {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--panel-bg);
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            font-size: 18px;
+            font-weight: 600;
+            z-index: 10;
+            color: var(--accent-color);
         }
     </style>
 </head>
 <body>
 
-    <div id="instruction">INIZIALIZZAZIONE WEBCAM IN CORSO...</div>
+    <div class="container">
+        <div class="hud">
+            <h1>COSMIC-S // BODY SYSTEM</h1>
+            <p>Stato: <span id="status">Calibrazione in corso...</span></p>
+        </div>
+        
+        <div class="score-board">
+            TARGET: <span id="score">0</span>
+        </div>
 
-    <video class="input_video" autoplay playsinline muted></video>
-    <canvas id="paint_canvas"></canvas>
-    <canvas id="output_canvas"></canvas>
+        <video id="webcam" autoplay playsinline></video>
+        <output id="output_canvas"></output>
+        <canvas id="canvas"></canvas>
+    </div>
 
     <script>
-        const videoElement = document.querySelector('.input_video');
-        const paintCanvas = document.getElementById('paint_canvas');
-        const paintCtx = paintCanvas.getContext('2d');
-        const outputCanvas = document.getElementById('output_canvas');
-        const outputCtx = outputCanvas.getContext('2d');
-        const instructionEl = document.getElementById('instruction');
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const statusEl = document.getElementById('status');
+        const scoreEl = document.getElementById('score');
 
-        function resizeCanvases() {
-            paintCanvas.width = window.innerWidth;
-            paintCanvas.height = window.innerHeight;
-            outputCanvas.width = window.innerWidth;
-            outputCanvas.height = window.innerHeight;
+        let score = 0;
+        let targetPos = { x: Math.random() * 600 + 100, y: Math.random() * 400 + 100, radius: 25 };
+
+        function resizeCanvas() {
+            canvasElement.width = canvasElement.parentElement.clientWidth;
+            canvasElement.height = canvasElement.parentElement.clientHeight;
         }
-        window.addEventListener('resize', resizeCanvases);
-        resizeCanvases();
-
-        function getPalette() {
-            const rightX = 80; 
-            return [
-                { name: "Rosso", color: "#ff3333", x: rightX, y: 60, size: 45 },
-                { name: "Arancione", color: "#ff9900", x: rightX, y: 130, size: 45 },
-                { name: "Giallo", color: "#ffff33", x: rightX, y: 200, size: 45 },
-                { name: "Verde", color: "#33cc33", x: rightX, y: 270, size: 45 },
-                { name: "Blu", color: "#3333ff", x: rightX, y: 340, size: 45 },
-                { name: "Viola", color: "#9933ff", x: rightX, y: 410, size: 45 },
-                { name: "Bianco", color: "#ffffff", x: rightX, y: 480, size: 45 },
-                { name: "Gomma", color: "#000000", x: rightX, y: 550, size: 45, isEraser: true }
-            ];
-        }
-
-        let currentColor = "#ff3333";
-        let isEraserActive = false;
-        let brushSize = 10;
-        
-        let smoothX = null;
-        let smoothY = null;
-        let lastX = null;
-        let lastY = null;
-        let isDrawing = false;
-        let pinchFramesCount = 0;
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         function onResults(results) {
-            outputCtx.save();
-            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            const palette = getPalette();
+            // Disegna il flusso della webcam a schermo intero sul canvas
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-            // Disegna palette
-            palette.forEach(item => {
-                outputCtx.beginPath();
-                outputCtx.arc(item.x, item.y, item.size / 2, 0, Math.PI * 2);
-                outputCtx.fillStyle = item.color;
-                outputCtx.fill();
-                outputCtx.lineWidth = 3;
-                outputCtx.strokeStyle = (currentColor === item.color || (item.isEraser && isEraserActive)) ? "#00ffcc" : "#ffffff";
-                outputCtx.stroke();
-                outputCtx.closePath();
+            if (results.poseLandmarks) {
+                statusEl.innerText = "Sistema attivo & Online";
+                statusEl.style.color = "#00FF66";
 
-                outputCtx.save();
-                outputCtx.translate(item.x + 35, item.y + 4);
-                outputCtx.scale(-1, 1);
-                outputCtx.fillStyle = "#ffffff";
-                outputCtx.font = "12px Courier New";
-                outputCtx.fillText(item.name, 0, 0);
-                outputCtx.restore();
+                // Disegna lo scheletro personalizzato in stile minimal/cyber
+                drawCustomSkeleton(results.poseLandmarks);
+
+                // Controlla se la mano destra (landmark 16) tocca il bersaglio virtuale
+                checkTargetInteraction(results.poseLandmarks[16]);
+            } else {
+                statusEl.innerText = "Inquadratura persa...";
+                statusEl.style.color = "#FF3333";
+            }
+
+            // Disegna il bersaglio da "prendere" muovendo il corpo
+            drawTarget();
+
+            canvasCtx.restore();
+        }
+
+        function drawCustomSkeleton(landmarks) {
+            const w = canvasElement.width;
+            const h = canvasElement.height;
+
+            // Connessioni principali dello scheletro
+            const connections = [
+                [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Braccia
+                [11, 23], [12, 24], [23, 24],                    // Busto
+                [23, 25], [25, 27], [24, 26], [26, 28]           // Gambe
+            ];
+
+            canvasCtx.strokeStyle = '#00FF66';
+            canvasCtx.lineWidth = 3;
+
+            connections.forEach(([i, j]) => {
+                const p1 = landmarks[i];
+                const p2 = landmarks[j];
+                if (p1.visibility > 0.6 && p2.visibility > 0.6) {
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(p1.x * w, p1.y * h);
+                    canvasCtx.lineTo(p2.x * w, p2.y * h);
+                    canvasCtx.stroke();
+                }
             });
 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-
-                drawConnectors(outputCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.5)', lineWidth: 2});
-                drawLandmarks(outputCtx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 3});
-
-                const rawX = landmarks[8].x * window.innerWidth;
-                const rawY = landmarks[8].y * window.innerHeight;
-                const thumbX = landmarks[4].x * window.innerWidth;
-                const thumbY = landmarks[4].y * window.innerHeight;
-
-                if (smoothX === null || smoothY === null) {
-                    smoothX = rawX;
-                    smoothY = rawY;
-                } else {
-                    smoothX += (rawX - smoothX) * 0.4;
-                    smoothY += (rawY - smoothY) * 0.4;
+            // Punti nodali sulle giunture
+            landmarks.forEach((p) => {
+                if (p.visibility > 0.6) {
+                    canvasCtx.fillStyle = '#FFFFFF';
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(p.x * w, p.y * h, 4, 0, 2 * Math.PI);
+                    canvasCtx.fill();
                 }
-
-                const pinchDist = Math.hypot(smoothX - thumbX, smoothY - thumbY);
-                let isPinchedNow = pinchDist < 50;
-                if (isPinchedNow) {
-                    pinchFramesCount = Math.min(pinchFramesCount + 1, 5);
-                } else {
-                    pinchFramesCount = Math.max(pinchFramesCount - 1, 0);
-                }
-                const isStablePinched = pinchFramesCount >= 2;
-
-                outputCtx.beginPath();
-                outputCtx.arc(smoothX, smoothY, 9, 0, Math.PI * 2);
-                outputCtx.fillStyle = isStablePinched ? "#00ffcc" : currentColor;
-                outputCtx.fill();
-                outputCtx.lineWidth = 2;
-                outputCtx.strokeStyle = "#ffffff";
-                outputCtx.stroke();
-
-                let selectingColor = false;
-                palette.forEach(item => {
-                    const distToPalette = Math.hypot(smoothX - item.x, smoothY - item.y);
-                    if (distToPalette < item.size / 2) {
-                        selectingColor = true;
-                        if (isStablePinched) {
-                            if (item.isEraser) {
-                                isEraserActive = true;
-                            } else {
-                                isEraserActive = false;
-                                currentColor = item.color;
-                            }
-                        }
-                    }
-                });
-
-                if (isStablePinched && !selectingColor) {
-                    if (!isDrawing) {
-                        isDrawing = true;
-                        lastX = smoothX;
-                        lastY = smoothY;
-                    } else {
-                        paintCtx.beginPath();
-                        paintCtx.moveTo(lastX, lastY);
-                        paintCtx.lineTo(smoothX, smoothY);
-                        
-                        if (isEraserActive) {
-                            paintCtx.strokeStyle = "#000000";
-                            paintCtx.lineWidth = 50;
-                            paintCtx.globalCompositeOperation = "destination-out";
-                        } else {
-                            paintCtx.strokeStyle = currentColor;
-                            paintCtx.lineWidth = brushSize;
-                            paintCtx.globalCompositeOperation = "source-over";
-                        }
-                        
-                        paintCtx.lineCap = "round";
-                        paintCtx.lineJoin = "round";
-                        paintCtx.stroke();
-                        paintCtx.closePath();
-
-                        lastX = smoothX;
-                        lastY = smoothY;
-                    }
-                } else {
-                    isDrawing = false;
-                    lastX = null;
-                    lastY = null;
-                }
-
-            } else {
-                isDrawing = false;
-                smoothX = null;
-                smoothY = null;
-                pinchFramesCount = 0;
-            }
-
-            outputCtx.restore();
+            });
         }
 
-        async function startApp() {
-            try {
-                const hands = new Hands({
-                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-                });
+        function drawTarget() {
+            canvasCtx.strokeStyle = '#FF3366';
+            canvasCtx.lineWidth = 4;
+            canvasCtx.beginPath();
+            canvasCtx.arc(targetPos.x, targetPos.y, targetPos.radius, 0, 2 * Math.PI);
+            canvasCtx.stroke();
 
-                hands.setOptions({
-                    maxNumHands: 1,
-                    modelComplexity: 1,
-                    minDetectionConfidence: 0.75,
-                    minTrackingConfidence: 0.75
-                });
+            canvasCtx.fillStyle = 'rgba(255, 51, 102, 0.3)';
+            canvasCtx.fill();
+        }
 
-                hands.onResults(onResults);
+        function checkTargetInteraction(handLandmark) {
+            if (!handLandmark || handLandmark.visibility < 0.6) return;
 
-                const camera = new Camera(videoElement, {
-                    onFrame: async () => {
-                        await hands.send({ image: videoElement });
-                    },
-                    width: 1280,
-                    height: 720,
-                    facingMode: 'user'
-                });
-                
-                await camera.start();
-                instructionEl.innerText = "USA L'INDICE • PIZZICO PER DISEGNARE • COLORI A DESTRA";
-            } catch (error) {
-                console.error(error);
-                instructionEl.innerText = "ERRORE: Controlla i permessi della webcam o usa un server locale.";
+            const w = canvasElement.width;
+            const h = canvasElement.height;
+            const handX = handLandmark.x * w;
+            const handY = handLandmark.y * h;
+
+            // Distanza tra la mano e il centro del bersaglio
+            const dist = Math.hypot(handX - targetPos.x, handY - targetPos.y);
+
+            if (dist < targetPos.radius + 15) {
+                // Bersaglio preso! Genera una nuova posizione casuale
+                score++;
+                scoreEl.innerText = score;
+                targetPos.x = Math.random() * (canvasElement.width - 150) + 75;
+                targetPos.y = Math.random() * (canvasElement.height - 150) + 75;
             }
         }
 
-        startApp();
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+        camera.start();
     </script>
 </body>
 </html>
