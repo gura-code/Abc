@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retrolens Natural Finger Mesh</title>
+    <title>Retrolens Mirrored Finger Mesh</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -30,6 +30,8 @@
             border-radius: 6px;
             z-index: 20;
             box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+            /* Manteniamo l'HUD dritto e leggibile anche se il canvas è specchiato */
+            transform: scaleX(1); 
         }
 
         h4 { margin: 0 0 8px 0; font-size: 13px; color: #ff007f; letter-spacing: 1px; }
@@ -56,7 +58,8 @@
             position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            /* NESSUNA INVERSIONE: La tua mano sinistra a sinistra rimane a sinistra! */
+            /* RIBALTAMENTO TOTALE: Effetto specchio naturale per l'utente */
+            transform: scaleX(-1);
             z-index: 2;
         }
     </style>
@@ -64,7 +67,7 @@
 <body>
 
     <div class="hud-top">
-        <h4>NATURAL FINGER MESH FX</h4>
+        <h4>MIRRORED FINGER MESH FX</h4>
         <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">MODALITÀ: <span style="color: #00ffcc;">FINESTRA A COLORI</span></div>
         <div>
             <button class="filter-btn active" onclick="setMode('portal')">Finestra Colore</button>
@@ -112,31 +115,27 @@
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.filter = 'none';
 
-            // 2. Controllo delle mani con orientamento naturale (senza specchio)
+            // 2. Controllo delle mani con orientamento naturale
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2 && results.multiHandedness) {
                 let leftHand = null;
                 let rightHand = null;
 
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-                    const label = results.multiHandedness[i].label; // 'Left' o 'Right' nativo di MediaPipe
-                    // Usiamo la coordinata X media della mano per capire se sta fisicamente a sinistra o a destra sullo schermo
                     const landmarks = results.multiHandLandmarks[i];
                     const avgX = landmarks.reduce((acc, pt) => acc + pt.x, 0) / landmarks.length;
 
                     if (avgX < 0.5) {
-                        leftHand = landmarks; // Mano a sinistra dello schermo
+                        leftHand = landmarks;
                     } else {
-                        rightHand = landmarks; // Mano a destra dello schermo
+                        rightHand = landmarks;
                     }
                 }
 
-                // Fallback di sicurezza se le mani sono vicine
                 if (!leftHand || !rightHand) {
                     leftHand = results.multiHandLandmarks[0];
                     rightHand = results.multiHandLandmarks[1];
                 }
 
-                // Punte esatte: Indice (8) e Pollice (4)
                 const l_index = { x: leftHand[8].x * canvasElement.width, y: leftHand[8].y * canvasElement.height };
                 const l_thumb = { x: leftHand[4].x * canvasElement.width, y: leftHand[4].y * canvasElement.height };
                 const r_index = { x: rightHand[8].x * canvasElement.width, y: rightHand[8].y * canvasElement.height };
@@ -144,7 +143,6 @@
 
                 canvasCtx.save();
                 canvasCtx.beginPath();
-                // Perimetro geometrico tra le dita
                 canvasCtx.moveTo(l_index.x, l_index.y);
                 canvasCtx.lineTo(r_index.x, r_index.y);
                 canvasCtx.lineTo(r_thumb.x, r_thumb.y);
@@ -164,7 +162,7 @@
                 canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                 canvasCtx.restore();
 
-                // 3. Cornice wireframe ed evidenziazione dei collegamenti richiesti
+                // 3. Cornice wireframe ed evidenziazione dei collegamenti
                 canvasCtx.strokeStyle = '#00ffcc';
                 canvasCtx.lineWidth = 3;
                 canvasCtx.shadowBlur = 18;
@@ -177,7 +175,6 @@
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
-                // Linee di collegamento puntino a puntino
                 canvasCtx.strokeStyle = '#ff007f';
                 canvasCtx.lineWidth = 2;
                 // Indice <-> Indice
