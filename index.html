@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gojo Hand Tracking - Infinity & Beyond</title>
+    <title>Gojo Precise Hand Signs - JJK</title>
     <!-- Importazione librerie MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
@@ -13,7 +13,7 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #05050a;
+            background-color: #030308;
             color: #00d2ff;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
@@ -24,7 +24,7 @@
         .hud-panel {
             position: absolute;
             border: 1px solid rgba(0, 210, 255, 0.4);
-            background: rgba(5, 5, 10, 0.85);
+            background: rgba(3, 3, 8, 0.85);
             padding: 10px 15px;
             font-size: 12px;
             letter-spacing: 1px;
@@ -36,7 +36,6 @@
         #top-left { top: 20px; left: 20px; }
         #top-right { top: 20px; right: 20px; text-align: right; }
         
-        /* Video webcam in background sfumato */
         .input_video {
             position: absolute;
             top: 0;
@@ -59,23 +58,22 @@
             z-index: 2;
         }
 
-        /* Sfera di Energia Energetica (Cursed Energy Orb) */
+        /* Sfera di Energia */
         #energy-orb {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 80px;
-            height: 80px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
             transform: translate(-50%, -50%) scale(0);
             pointer-events: none;
             z-index: 15;
-            transition: all 0.2s ease-out;
-            box-shadow: 0 0 30px #00d2ff, inset 0 0 20px #ffffff;
+            transition: all 0.15s ease-out;
+            box-shadow: 0 0 40px #00d2ff, inset 0 0 20px #ffffff;
             background: radial-gradient(circle, #ffffff 0%, #00d2ff 60%, #0044ff 100%);
         }
 
-        /* Testo descrittivo della tecnica attiva */
         #technique-display {
             position: absolute;
             bottom: 40px;
@@ -94,20 +92,17 @@
 <body>
 
     <div id="top-left" class="hud-panel">
-        TECHNIQUE: <span id="tech-name" style="color: #00d2ff;">INFINITY (MUKAGEN)</span><br>
-        STATUS: <span id="status-text" style="color: #ff3366;">SEARCHING...</span>
+        TECHNIQUE: <span id="tech-name" style="color: #00d2ff;">MUKAGEN (IDLE)</span><br>
+        STATUS: <span id="status-text" style="color: #ff3366;">IN ATTESA DI GESTO...</span>
     </div>
 
     <div id="top-right" class="hud-panel">
-        JUJUTSU LEVEL: SPECIAL GRADE<br>
+        MODE: PRECISE MUDRA<br>
         ENERGY: <span id="energy-level" style="color: #00d2ff;">STABLE</span>
     </div>
 
-    <!-- Sfera di energia evocata -->
     <div id="energy-orb"></div>
-
-    <!-- Nome della tecnica a schermo -->
-    <div id="technique-display">MOSTRA LA MANO PER INIZIARE</div>
+    <div id="technique-display">FA UN GESTO PRECISO DI GOJO</div>
 
     <video class="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
@@ -130,47 +125,50 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
+        // Funzione di supporto per controllare se un dito è teso (confrontando la punta con le nocche)
+        function isFingerExtended(tip, pip) {
+            return tip.y < pip.y; // Nello spazio video Y cresce verso il basso
+        }
+
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                statusText.innerText = "ACTIVE";
+                statusText.innerText = "MANA RILEVATA";
                 statusText.style.color = "#00d2ff";
 
                 const landmarks = results.multiHandLandmarks[0];
 
-                // DISEGNO PERSONALIZZATO: Linee azzurre/blu e nodi bianchi (stile Gojo)
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 210, 255, 0.6)', lineWidth: 3});
-                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 4});
+                // Disegno scheletro pulito color azzurro/blu
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 210, 255, 0.5)', lineWidth: 2});
+                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 3});
 
-                const indexFinger = landmarks[8];
-                const thumb = landmarks[4];
-                const pinky = landmarks[20]; // Usato per calcolare l'apertura totale della mano
-
-                // Coordinate dello schermo basate sull'indice
-                const x = (1 - indexFinger.x) * window.innerWidth;
-                const y = indexFinger.y * window.innerHeight;
-
-                // Calcolo della distanza tra pollice e indice (Pinch -> Rosso)
-                const pinchDistance = Math.hypot(
-                    indexFinger.x - thumb.x,
-                    indexFinger.y - thumb.y
-                );
-
-                // Calcolo della distanza indice-mignolo (Mano aperta vs Chiusa)
-                const handSpread = Math.hypot(
-                    indexFinger.x - pinky.x,
-                    indexFinger.y - pinky.y
-                );
-
-                // Posiziona la sfera di energia sul dito indice
+                // Posizione dell'indice (punto 8) come riferimento per la sfera
+                const x = (1 - landmarks[8].x) * window.innerWidth;
+                const y = landmarks[8].y * window.innerHeight;
                 energyOrb.style.left = `${x}px`;
                 energyOrb.style.top = `${y}px`;
 
-                if (pinchDistance < 0.05) {
-                    // --- TECNICA MALEDETTA: ROSSA (AKA - Aka) ---
-                    energyOrb.style.transform = "translate(-50%, -50%) scale(1.5)";
+                // Analisi precisa dello stato delle dita per capire il MUDRA esatto
+                // Indice (punto 8 teso se y < punto 6)
+                const indexExtended = isFingerExtended(landmarks[8], landmarks[6]);
+                // Medio (punto 12 teso se y < punto 10)
+                const middleExtended = isFingerExtended(landmarks[12], landmarks[10]);
+                // Anulare (punto 16 teso se y < punto 14)
+                const ringExtended = isFingerExtended(landmarks[16], landmarks[14]);
+                // Mignolo (punto 20 teso se y < punto 18)
+                const pinkyExtended = isFingerExtended(landmarks[20], landmarks[18]);
+
+                // Distanza tra pollice (4) e indice (8) per il controllo del cerchio/pizzico
+                const thumbIndexDist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
+
+                // --- LOGICA DEI GESTI SPECIFICI ---
+
+                if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) {
+                    // --- GESTO 1: SOLO INDICE TESO (TECNICA ROSSA / AKA) ---
+                    // Corrisponde alla posa dove Gojo alza l'indice puntato
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(1.6)";
                     energyOrb.style.boxShadow = "0 0 50px #ff0033, inset 0 0 25px #ffffff";
                     energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #ff0033 60%, #880011 100%)";
                     
@@ -181,9 +179,24 @@
                     techniqueDisplay.style.color = "#ff0033";
                     techniqueDisplay.style.textShadow = "0 0 15px #ff0033";
 
-                } else if (handSpread > 0.35) {
-                    // --- TECNICA IMMAGINARIA: VIOLA (Murasaki) - Mano aperta grande ---
-                    energyOrb.style.transform = "translate(-50%, -50%) scale(2.8)";
+                } else if (indexExtended && middleExtended && !ringExtended && !pinkyExtended) {
+                    // --- GESTO 2: DUE DITA TESE O INCROCIATE (TECNICA BLU / AO) ---
+                    // Corrisponde al segno delle due dita alzate o intrecciate
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(1.2)";
+                    energyOrb.style.boxShadow = "0 0 40px #00d2ff, inset 0 0 20px #ffffff";
+                    energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #00d2ff 60%, #0044ff 100%)";
+                    
+                    techName.innerText = "CURSED TECHNIQUE: BLUE (AO)";
+                    techName.style.color = "#00d2ff";
+                    energyLevel.innerText = "ATTRACT";
+                    techniqueDisplay.innerText = "🔵 TECNICA MALEDETTA: BLU";
+                    techniqueDisplay.style.color = "#00d2ff";
+                    techniqueDisplay.style.textShadow = "0 0 10px #00d2ff";
+
+                } else if (thumbIndexDist < 0.04 && ringExtended && pinkyExtended) {
+                    // --- GESTO 3: CERCHIO CON POLLICE E INDICE (TECNICA IMMAGINARIA / VIOLA - MURASAKI) ---
+                    // Corrisponde esattamente alla posa iconica con le dita a cerchio (come nelle foto)
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(2.5)";
                     energyOrb.style.boxShadow = "0 0 70px #b000ff, inset 0 0 35px #ffffff";
                     energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #b000ff 50%, #440088 100%)";
                     
@@ -195,26 +208,21 @@
                     techniqueDisplay.style.textShadow = "0 0 20px #b000ff";
 
                 } else {
-                    // --- TECNICA MALEDETTA: BLU (Ao) - Stato standard ---
-                    energyOrb.style.transform = "translate(-50%, -50%) scale(1)";
-                    energyOrb.style.boxShadow = "0 0 35px #00d2ff, inset 0 0 20px #ffffff";
-                    energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #00d2ff 60%, #0044ff 100%)";
-                    
-                    techName.innerText = "CURSED TECHNIQUE: BLUE (AO)";
+                    // --- NESSUN GESTO VALIDO (STANBY) ---
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(0)";
+                    techName.innerText = "MUKAGEN (NEUTRAL)";
                     techName.style.color = "#00d2ff";
-                    energyLevel.innerText = "ATTRACT";
-                    techniqueDisplay.innerText = "🔵 TECNICA MALEDETTA: BLU";
+                    energyLevel.innerText = "STABLE";
+                    techniqueDisplay.innerText = "FAI IL MUDRA CORRETTO (BLU, ROSSO O VIOLA)";
                     techniqueDisplay.style.color = "#00d2ff";
                     techniqueDisplay.style.textShadow = "0 0 10px #00d2ff";
                 }
 
             } else {
-                statusText.innerText = "LOST";
+                statusText.innerText = "IN ATTESA DI GESTO...";
                 statusText.style.color = "#ff3366";
-                techName.innerText = "INFINITY (MUKAGEN)";
                 energyOrb.style.transform = "translate(-50%, -50%) scale(0)";
-                techniqueDisplay.innerText = "MOSTRA LA MANO PER INIZIARE";
-                techniqueDisplay.style.color = "#00d2ff";
+                techniqueDisplay.innerText = "MOSTRA LA MANO ALLA WEBCAM";
             }
             canvasCtx.restore();
         }
@@ -226,8 +234,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.65
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
         });
 
         hands.onResults(onResults);
