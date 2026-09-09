@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retrolens Pro - Dual Effects Edition</title>
+    <title>Retrolens Pro - Dual Effects Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -243,7 +243,6 @@
                 <input type="color" id="theme-color" value="#00ffcc" onchange="accentColor = this.value">
             </div>
 
-            <!-- FILTRI DENTRO -->
             <div class="control-group">
                 <label>✨ DENTRO IL PORTALE (MANI):</label>
                 <button class="option-btn active" onclick="setInsideEffect('color', this)">Colore Vivo</button>
@@ -253,7 +252,6 @@
                 <button class="option-btn" onclick="setInsideEffect('inverse', this)">Inverso</button>
             </div>
 
-            <!-- FILTRI FUORI -->
             <div class="control-group">
                 <label>🌌 FUORI DAL PORTALE (SFONDO):</label>
                 <button class="option-btn" onclick="setOutsideEffect('color', this)">Colore Vivo</button>
@@ -268,7 +266,7 @@
     <script>
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
+        const canvasCtx = canvasElement.getContext('2d', { alpha: false }); // Canvas opaco per evitare sfondi trasparenti
         const statusText = document.getElementById('status-text');
         const errorOverlay = document.getElementById('error-overlay');
         const errorMsg = document.getElementById('error-msg');
@@ -333,34 +331,24 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        function applyFilterStyle(ctx, effectType, w, h) {
+        function renderFilteredImage(ctx, image, effectType, w, h) {
             if (effectType === 'color') {
                 ctx.filter = 'saturate(180%) contrast(110%)';
+                ctx.drawImage(image, 0, 0, w, h);
             } else if (effectType === 'bw') {
                 ctx.filter = 'grayscale(100%) contrast(140%) brightness(90%)';
+                ctx.drawImage(image, 0, 0, w, h);
             } else if (effectType === 'blur') {
-                ctx.filter = 'blur(12px) saturate(130%)';
-            } else if (effectType === 'pixel') {
-                ctx.filter = 'none'; // Gestito separatamente o simulato
+                ctx.filter = 'blur(15px) saturate(130%)';
+                ctx.drawImage(image, 0, 0, w, h);
             } else if (effectType === 'inverse') {
                 ctx.filter = 'invert(100%) saturate(200%)';
-            } else {
+                ctx.drawImage(image, 0, 0, w, h);
+            } else if (effectType === 'pixel') {
                 ctx.filter = 'none';
-            }
-        }
-
-        function drawEffectLayer(ctx, image, effectType, w, h, clipPathFn = null) {
-            ctx.save();
-            if (clipPathFn) {
-                clipPathFn(ctx);
-                ctx.clip();
-            }
-
-            if (effectType === 'pixel') {
-                // Pixel art effect realistico via canvas a bassa risoluzione
-                const pScale = 0.05; // Fattore di pixelatura
-                const pw = Math.floor(w * pScale);
-                const ph = Math.floor(h * pScale);
+                const pScale = 0.04;
+                const pw = Math.max(1, Math.floor(w * pScale));
+                const ph = Math.max(1, Math.floor(h * pScale));
                 
                 const offScreen = document.createElement('canvas');
                 offScreen.width = pw;
@@ -372,10 +360,10 @@
                 ctx.drawImage(offScreen, 0, 0, pw, ph, 0, 0, w, h);
                 ctx.imageSmoothingEnabled = true;
             } else {
-                applyFilterStyle(ctx, effectType, w, h);
+                ctx.filter = 'none';
                 ctx.drawImage(image, 0, 0, w, h);
             }
-            ctx.restore();
+            ctx.filter = 'none';
         }
 
         function triggerCapture() {
@@ -400,11 +388,11 @@
                     setTimeout(() => { flashEl.style.opacity = '0'; }, 300);
 
                     statusText.innerText = "FOTO SCATTATA!";
-                    lastCapturedUrl = canvasElement.toDataURL('image/png', 1.0);
+                    lastCapturedUrl = canvasElement.toDataURL('image/jpeg', 0.95);
                     
                     const link = document.createElement('a');
                     link.href = lastCapturedUrl;
-                    link.download = `retrolens-dual-${Date.now()}.png`;
+                    link.download = `retrolens-dual-${Date.now()}.jpg`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -419,7 +407,7 @@
             if (!lastCapturedUrl) return;
             const link = document.createElement('a');
             link.href = lastCapturedUrl;
-            link.download = `retrolens-dual-${Date.now()}.png`;
+            link.download = `retrolens-dual-${Date.now()}.jpg`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -436,6 +424,9 @@
 
             const w = canvasElement.width;
             const h = canvasElement.height;
+
+            // 1. Disegna SEMPRE l'esterno su tutto lo schermo come base solida
+            renderFilteredImage(canvasCtx, results.image, outsideEffect, w, h);
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
                 let leftHand = null;
@@ -473,31 +464,30 @@
                 const r_index = { x: rightHand[8].x * w, y: rightHand[8].y * h };
                 const r_thumb = { x: rightHand[4].x * w, y: rightHand[4].y * h };
 
-                const portalClipFn = (ctx) => {
-                    ctx.beginPath();
-                    ctx.moveTo(l_index.x, l_index.y);
-                    ctx.lineTo(r_index.x, r_index.y);
-                    ctx.lineTo(r_thumb.x, r_thumb.y);
-                    ctx.lineTo(l_thumb.x, l_thumb.y);
-                    ctx.closePath();
-                };
+                // 2. Disegna l'INTERNO del portale sopra lo sfondo ritagliando l'area esatta delle mani
+                canvasCtx.save();
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(l_index.x, l_index.y);
+                canvasCtx.lineTo(r_index.x, r_index.y);
+                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
+                canvasCtx.lineTo(l_thumb.x, l_thumb.y);
+                canvasCtx.closePath();
+                canvasCtx.clip();
 
-                // 1. Disegna prima lo SFONDO (Fuori dal portale) con il suo filtro
-                drawEffectLayer(canvasCtx, results.image, outsideEffect, w, h, (ctx) => {
-                    ctx.rect(0, 0, w, h);
-                    portalClipFn(ctx);
-                    ctx.clip('evenodd'); // Esclude la zona interna del portale
-                });
+                renderFilteredImage(canvasCtx, results.image, insideEffect, w, h);
+                canvasCtx.restore();
 
-                // 2. Disegna l'INTERNO del portale con il suo filtro dedicato
-                drawEffectLayer(canvasCtx, results.image, insideEffect, w, h, portalClipFn);
-
-                // 3. Cornice luminosa geometrica ed elementi visivi
+                // 3. Cornice e scheletro mani
                 canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
                 canvasCtx.shadowBlur = 15;
                 canvasCtx.shadowColor = accentColor;
-                portalClipFn(canvasCtx);
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(l_index.x, l_index.y);
+                canvasCtx.lineTo(r_index.x, r_index.y);
+                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
+                canvasCtx.lineTo(l_thumb.x, l_thumb.y);
+                canvasCtx.closePath();
                 canvasCtx.stroke();
                 canvasCtx.shadowBlur = 0;
 
@@ -514,8 +504,6 @@
                 });
 
             } else {
-                // Se non rileva le mani, applica comunque il filtro esterno a tutto lo schermo
-                drawEffectLayer(canvasCtx, results.image, outsideEffect, w, h);
                 if (!isCountingDown) {
                     statusText.innerText = "MOSTRA 🐺 ENTRAMBE LE MANI ALLA CAMERA";
                 }
