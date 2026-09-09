@@ -23,7 +23,6 @@
             align-items: center;
         }
 
-        /* Container per gestire i formati senza schiacciare l'immagine */
         #viewfinder-container {
             position: relative;
             width: 100vw;
@@ -44,7 +43,6 @@
             z-index: 2;
         }
 
-        /* Pannello HUD / Controlli */
         .hud-top {
             position: absolute;
             top: 20px;
@@ -72,7 +70,7 @@
             margin-bottom: 3px;
         }
 
-        .filter-btn, .option-btn {
+        .filter-btn, .option-btn, #manual-download-btn {
             background: rgba(0, 255, 204, 0.1);
             border: 1px solid #00ffcc;
             color: #00ffcc;
@@ -90,6 +88,21 @@
             font-weight: bold;
         }
 
+        #manual-download-btn {
+            display: none;
+            width: 100%;
+            background: #ff007f;
+            border-color: #ff007f;
+            color: #fff;
+            font-weight: bold;
+            margin-top: 8px;
+            padding: 6px;
+            text-align: center;
+        }
+        #manual-download-btn:hover {
+            background: #ff3399;
+        }
+
         input[type="color"] {
             border: 1px solid #00ffcc;
             width: 30px;
@@ -99,7 +112,6 @@
             vertical-align: middle;
         }
 
-        /* Overlay countdown & flash */
         #countdown-overlay {
             position: absolute;
             top: 50%; left: 50%;
@@ -133,14 +145,12 @@
             <h4>RETROLENS PRO FX</h4>
             <div id="status-text" style="font-size: 10px; margin-bottom: 8px; color: #fff;">STATO: <span style="color: #00ffcc;">PRONTO</span></div>
             
-            <!-- Telecamera -->
             <div class="control-group">
                 <label>FOTOCAMERA:</label>
                 <button class="option-btn active" onclick="setCamera('user', this)">Frontale</button>
                 <button class="option-btn" onclick="setCamera('environment', this)">Retro</button>
             </div>
 
-            <!-- Formato Schermo -->
             <div class="control-group">
                 <label>FORMATO:</label>
                 <button class="option-btn active" onclick="setAspectRatio('full', this)">Schermo Intero</button>
@@ -148,13 +158,11 @@
                 <button class="option-btn" onclick="setAspectRatio('16:9', this)">Orizzontale (16:9)</button>
             </div>
 
-            <!-- Colore Linee e Punti -->
             <div class="control-group">
                 <label>COLORE ELEMENTI:</label>
                 <input type="color" id="theme-color" value="#00ffcc" onchange="accentColor = this.value">
             </div>
 
-            <!-- Filtri -->
             <div class="control-group">
                 <label>FILTRI:</label>
                 <button class="filter-btn active" onclick="setMode('portal', this)">Finestra Colore</button>
@@ -162,6 +170,9 @@
                 <button class="filter-btn" onclick="setMode('neon', this)">Neon</button>
                 <button class="filter-btn" onclick="setMode('none', this)">Nessuno</button>
             </div>
+
+            <!-- Pulsante di download manuale d'emergenza se il browser blocca quello automatico -->
+            <button id="manual-download-btn" onclick="downloadImageManually()">SCARICA FOTO 💾</button>
         </div>
 
         <div id="countdown-overlay">3</div>
@@ -178,6 +189,7 @@
         const countdownEl = document.getElementById('countdown-overlay');
         const flashEl = document.getElementById('flash-overlay');
         const container = document.getElementById('viewfinder-container');
+        const downloadBtn = document.getElementById('manual-download-btn');
 
         let currentMode = 'portal';
         let currentFacingMode = 'user';
@@ -185,6 +197,7 @@
         let accentColor = '#00ffcc';
         let isCountingDown = false;
         let cameraInstance = null;
+        let lastCapturedDataUrl = null;
 
         function setMode(mode, btn) {
             currentMode = mode;
@@ -204,7 +217,6 @@
             document.querySelectorAll('.control-group:nth-child(3) .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
             
-            // Applica dimensioni proporzionate senza schiacciare l'immagine
             if (aspect === 'full') {
                 container.style.width = '100vw';
                 container.style.height = '100vh';
@@ -248,15 +260,34 @@
 
                     document.getElementById('status-text').innerHTML = `STATO: <span style="color: ${accentColor};">FOTO SCATTATA!</span>`;
 
+                    // Genera l'immagine e forza il download
                     setTimeout(() => {
+                        lastCapturedDataUrl = canvasElement.toDataURL('image/png', 1.0);
+                        
+                        // Tentativo di download automatico forzato
                         const link = document.createElement('a');
+                        link.href = lastCapturedDataUrl;
                         link.download = `retrolens-pro-${Date.now()}.png`;
-                        link.href = canvasElement.toDataURL('image/png', 1.0);
+                        document.body.appendChild(link);
                         link.click();
+                        document.body.removeChild(link);
+
+                        // Mostra anche il pulsante manuale per sicurezza
+                        downloadBtn.style.display = 'block';
                         isCountingDown = false;
                     }, 400);
                 }
             }, 1000);
+        }
+
+        function downloadImageManually() {
+            if (!lastCapturedDataUrl) return;
+            const link = document.createElement('a');
+            link.href = lastCapturedDataUrl;
+            link.download = `retrolens-pro-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function onResults(results) {
@@ -271,7 +302,6 @@
             const scaleX = canvasElement.width;
             const scaleY = canvasElement.height;
 
-            // Sfondo in bianco e nero
             canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
             canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
             canvasCtx.filter = 'none';
@@ -332,7 +362,6 @@
                 canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
                 canvasCtx.restore();
 
-                // Cornice wireframe personalizzata col colore scelto
                 canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
                 canvasCtx.shadowBlur = 20;
@@ -345,7 +374,6 @@
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
-                // Linee interne
                 canvasCtx.strokeStyle = '#ffffff';
                 canvasCtx.lineWidth = 2;
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
@@ -399,4 +427,3 @@
     </script>
 </body>
 </html>
-
