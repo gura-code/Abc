@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retrolens Pinch-to-Snap FX</title>
+    <title>Retrolens Pro Customizer FX</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -12,43 +12,91 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #000;
+            background-color: #0e0e0e;
             color: #00ffcc;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
+        /* Container per gestire i formati senza schiacciare l'immagine */
+        #viewfinder-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        #output_canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 2;
+        }
+
+        /* Pannello HUD / Controlli */
         .hud-top {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(10, 10, 10, 0.85);
+            background: rgba(14, 14, 14, 0.9);
             border: 1px solid rgba(0, 255, 204, 0.4);
-            padding: 12px 18px;
-            border-radius: 6px;
+            padding: 15px;
+            border-radius: 8px;
             z-index: 20;
-            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
-            transform: scaleX(1); 
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+            max-width: 320px;
+            transform: scaleX(1);
         }
 
-        h4 { margin: 0 0 8px 0; font-size: 13px; color: #ff007f; letter-spacing: 1px; }
-        .filter-btn {
+        h4 { margin: 0 0 10px 0; font-size: 14px; color: #ff007f; letter-spacing: 1px; }
+        
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 10px;
+            color: #aaa;
+            margin-bottom: 3px;
+        }
+
+        .filter-btn, .option-btn {
             background: rgba(0, 255, 204, 0.1);
             border: 1px solid #00ffcc;
             color: #00ffcc;
-            padding: 5px 10px;
+            padding: 4px 8px;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 11px;
+            font-size: 10px;
             cursor: pointer;
             border-radius: 3px;
-            margin-right: 4px;
+            margin-right: 3px;
+            margin-bottom: 3px;
         }
-        .filter-btn:hover, .filter-btn.active {
+        .filter-btn:hover, .filter-btn.active, .option-btn:hover, .option-btn.active {
             background: #00ffcc;
             color: #000;
             font-weight: bold;
+        }
+
+        input[type="color"] {
+            border: 1px solid #00ffcc;
+            width: 30px;
+            height: 22px;
+            background: transparent;
+            cursor: pointer;
+            vertical-align: middle;
         }
 
         /* Overlay countdown & flash */
@@ -76,33 +124,52 @@
         }
 
         .input_video { display: none; }
-
-        #output_canvas {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            transform: scaleX(-1);
-            z-index: 2;
-        }
     </style>
 </head>
 <body>
 
-    <div class="hud-top">
-        <h4>PINCH TO SNAP FX</h4>
-        <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">STATO: <span style="color: #00ffcc;">PRONTO (FAI IL PIZZICO)</span></div>
-        <div>
-            <button class="filter-btn active" onclick="setMode('portal')">Finestra Colore</button>
-            <button class="filter-btn" onclick="setMode('inverted')">Portale Inverso</button>
-            <button class="filter-btn" onclick="setMode('neon')">Neon Cyber</button>
+    <div id="viewfinder-container">
+        <div class="hud-top">
+            <h4>RETROLENS PRO FX</h4>
+            <div id="status-text" style="font-size: 10px; margin-bottom: 8px; color: #fff;">STATO: <span style="color: #00ffcc;">PRONTO</span></div>
+            
+            <!-- Telecamera -->
+            <div class="control-group">
+                <label>FOTOCAMERA:</label>
+                <button class="option-btn active" onclick="setCamera('user', this)">Frontale</button>
+                <button class="option-btn" onclick="setCamera('environment', this)">Retro</button>
+            </div>
+
+            <!-- Formato Schermo -->
+            <div class="control-group">
+                <label>FORMATO:</label>
+                <button class="option-btn active" onclick="setAspectRatio('full', this)">Schermo Intero</button>
+                <button class="option-btn" onclick="setAspectRatio('9:16', this)">Verticale (9:16)</button>
+                <button class="option-btn" onclick="setAspectRatio('16:9', this)">Orizzontale (16:9)</button>
+            </div>
+
+            <!-- Colore Linee e Punti -->
+            <div class="control-group">
+                <label>COLORE ELEMENTI:</label>
+                <input type="color" id="theme-color" value="#00ffcc" onchange="accentColor = this.value">
+            </div>
+
+            <!-- Filtri -->
+            <div class="control-group">
+                <label>FILTRI:</label>
+                <button class="filter-btn active" onclick="setMode('portal', this)">Finestra Colore</button>
+                <button class="filter-btn" onclick="setMode('inverted', this)">Inverso</button>
+                <button class="filter-btn" onclick="setMode('neon', this)">Neon</button>
+                <button class="filter-btn" onclick="setMode('none', this)">Nessuno</button>
+            </div>
         </div>
+
+        <div id="countdown-overlay">3</div>
+        <div id="flash-overlay"></div>
+
+        <video class="input_video" autoplay playsinline muted></video>
+        <canvas id="output_canvas"></canvas>
     </div>
-
-    <div id="countdown-overlay">3</div>
-    <div id="flash-overlay"></div>
-
-    <video class="input_video" autoplay playsinline muted></video>
-    <canvas id="output_canvas"></canvas>
 
     <script>
         const videoElement = document.querySelector('.input_video');
@@ -110,22 +177,50 @@
         const canvasCtx = canvasElement.getContext('2d');
         const countdownEl = document.getElementById('countdown-overlay');
         const flashEl = document.getElementById('flash-overlay');
+        const container = document.getElementById('viewfinder-container');
 
         let currentMode = 'portal';
+        let currentFacingMode = 'user';
+        let currentAspect = 'full';
+        let accentColor = '#00ffcc';
         let isCountingDown = false;
-        let lastLatestResults = null; // Memorizza l'ultimo frame per l'alta risoluzione
+        let cameraInstance = null;
 
-        function setMode(mode) {
+        function setMode(mode, btn) {
             currentMode = mode;
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            let desc = mode === 'portal' ? 'Finestra Colore' : (mode === 'inverted' ? 'Portale Inverso' : 'Neon Cyber');
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+        }
+
+        function setCamera(facing, btn) {
+            currentFacingMode = facing;
+            document.querySelectorAll('.control-group:nth-child(2) .option-btn').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+            restartCamera();
+        }
+
+        function setAspectRatio(aspect, btn) {
+            currentAspect = aspect;
+            document.querySelectorAll('.control-group:nth-child(3) .option-btn').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+            
+            // Applica dimensioni proporzionate senza schiacciare l'immagine
+            if (aspect === 'full') {
+                container.style.width = '100vw';
+                container.style.height = '100vh';
+            } else if (aspect === '9:16') {
+                container.style.width = 'calc(100vh * 9 / 16)';
+                container.style.height = '100vh';
+            } else if (aspect === '16:9') {
+                container.style.width = '100vw';
+                container.style.height = 'calc(100vw * 9 / 16)';
+            }
+            resizeCanvas();
         }
 
         function resizeCanvas() {
-            // Impostiamo la risoluzione interna del canvas a una definizione alta (es. 1920x1080 o dimensioni native video)
-            canvasElement.width = window.innerWidth * window.devicePixelRatio;
-            canvasElement.height = window.innerHeight * window.devicePixelRatio;
+            canvasElement.width = container.clientWidth * window.devicePixelRatio;
+            canvasElement.height = container.clientHeight * window.devicePixelRatio;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -148,31 +243,23 @@
                     clearInterval(timer);
                     countdownEl.style.display = 'none';
                     
-                    // Effetto Flash
                     flashEl.style.opacity = '1';
                     setTimeout(() => { flashEl.style.opacity = '0'; }, 300);
 
-                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: #00ffcc;">FOTO SCATTATA!</span>`;
+                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: ${accentColor};">FOTO SCATTATA!</span>`;
 
-                    // Creazione immagine in alta risoluzione dal canvas principale
                     setTimeout(() => {
-                        takeHighResDownload();
+                        const link = document.createElement('a');
+                        link.download = `retrolens-pro-${Date.now()}.png`;
+                        link.href = canvasElement.toDataURL('image/png', 1.0);
+                        link.click();
                         isCountingDown = false;
                     }, 400);
                 }
             }, 1000);
         }
 
-        function takeHighResDownload() {
-            // Crea un link temporaneo per il download automatico dell'alta risoluzione
-            const link = document.createElement('a');
-            link.download = `retrolens-snap-${Date.now()}.png`;
-            link.href = canvasElement.toDataURL('image/png', 1.0);
-            link.click();
-        }
-
         function onResults(results) {
-            lastLatestResults = results;
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -181,11 +268,10 @@
                 return;
             }
 
-            // Scala il contesto in base al pixel ratio per massima nitidezza
             const scaleX = canvasElement.width;
             const scaleY = canvasElement.height;
 
-            // 1. Sfondo in bianco e nero
+            // Sfondo in bianco e nero
             canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
             canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
             canvasCtx.filter = 'none';
@@ -210,11 +296,10 @@
                     rightHand = results.multiHandLandmarks[1];
                 }
 
-                // Controllo distanza pizzico (Indice 8 e Pollice 4) su entrambe le mani
                 const distLeft = Math.hypot(leftHand[4].x - leftHand[8].x, leftHand[4].y - leftHand[8].y);
                 const distRight = Math.hypot(rightHand[4].x - rightHand[8].x, rightHand[4].y - rightHand[8].y);
 
-                const pinchThreshold = 0.055; // Soglia per considerare il pizzico chiuso
+                const pinchThreshold = 0.055;
                 if (distLeft < pinchThreshold && distRight < pinchThreshold && !isCountingDown) {
                     triggerCapture();
                 }
@@ -240,16 +325,18 @@
                     canvasCtx.filter = 'invert(100%) saturate(200%)';
                 } else if (currentMode === 'neon') {
                     canvasCtx.filter = 'hue-rotate(120deg) saturate(300%) contrast(150%)';
+                } else {
+                    canvasCtx.filter = 'none';
                 }
                 
                 canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
                 canvasCtx.restore();
 
-                // 3. Cornice wireframe ed evidenziazione collegamenti
-                canvasCtx.strokeStyle = (distLeft < pinchThreshold && distRight < pinchThreshold) ? '#ff007f' : '#00ffcc';
+                // Cornice wireframe personalizzata col colore scelto
+                canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
                 canvasCtx.shadowBlur = 20;
-                canvasCtx.shadowColor = canvasCtx.strokeStyle;
+                canvasCtx.shadowColor = accentColor;
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(l_index.x, l_index.y);
                 canvasCtx.lineTo(r_index.x, r_index.y);
@@ -258,7 +345,8 @@
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
-                canvasCtx.strokeStyle = '#ff007f';
+                // Linee interne
+                canvasCtx.strokeStyle = '#ffffff';
                 canvasCtx.lineWidth = 2;
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(r_thumb.x, r_thumb.y); canvasCtx.stroke();
@@ -266,20 +354,14 @@
                 canvasCtx.beginPath(); canvasCtx.moveTo(r_thumb.x, r_thumb.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
 
                 [leftHand, rightHand].forEach(hand => {
-                    drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.3)', lineWidth: 1});
-                    drawLandmarks(canvasCtx, hand, {color: '#ff007f', lineWidth: 1, radius: 2});
+                    drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: accentColor, lineWidth: 1});
+                    drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 1, radius: 2});
                 });
 
             } else {
                 if (!isCountingDown) {
-                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: #00ffcc;">AVVICINA LE MANI E FAI IL PIZZICO</span>`;
+                    document.getElementById('status-text').innerHTML = `STATO: <span style="color: ${accentColor};">FAI IL PIZZICO CON LE 2 MANI</span>`;
                 }
-                canvasCtx.fillStyle = '#00ffcc';
-                canvasCtx.font = '16px Courier New';
-                canvasCtx.textAlign = 'center';
-                canvasCtx.shadowBlur = 10;
-                canvasCtx.shadowColor = '#00ffcc';
-                canvasCtx.fillText("UNISCI INDICE E POLLICE SU ENTRAMBE LE MANI PER SCATTARE", scaleX / 2, scaleY - 60);
             }
 
             canvasCtx.restore();
@@ -298,15 +380,23 @@
 
         hands.onResults(onResults);
 
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({ image: videoElement });
-            },
-            width: 1920,
-            height: 1080,
-            facingMode: 'user'
-        });
-        camera.start();
+        function restartCamera() {
+            if (cameraInstance) {
+                cameraInstance.stop();
+            }
+            cameraInstance = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({ image: videoElement });
+                },
+                width: 1920,
+                height: 1080,
+                facingMode: currentFacingMode
+            });
+            cameraInstance.start();
+        }
+
+        restartCamera();
     </script>
 </body>
 </html>
+
