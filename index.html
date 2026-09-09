@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Air Canvas - Definitivo</title>
+    <title>Air Canvas - Sicuro e Funzionante</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -28,11 +28,10 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(-1);
-            opacity: 0.2;
+            opacity: 0.3;
             z-index: 1;
         }
 
-        /* Canvas per il disegno (deve essere specchiato per allinearsi al video) */
         #paint_canvas {
             position: absolute;
             top: 0;
@@ -43,7 +42,6 @@
             z-index: 2;
         }
 
-        /* Canvas per UI e scheletro (specchiato anch'esso) */
         #output_canvas {
             position: absolute;
             top: 0;
@@ -63,18 +61,19 @@
             font-size: 14px;
             letter-spacing: 2px;
             color: #00ffcc;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 10px 20px;
             border: 1px solid #00ffcc;
             border-radius: 4px;
             z-index: 10;
             pointer-events: none;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <div id="instruction">INDICE PER MUOVERTI • PIZZICO STABILE PER DISEGNARE • COLORI A DESTRA</div>
+    <div id="instruction">INIZIALIZZAZIONE WEBCAM IN CORSO...</div>
 
     <video class="input_video" autoplay playsinline muted></video>
     <canvas id="paint_canvas"></canvas>
@@ -86,6 +85,7 @@
         const paintCtx = paintCanvas.getContext('2d');
         const outputCanvas = document.getElementById('output_canvas');
         const outputCtx = outputCanvas.getContext('2d');
+        const instructionEl = document.getElementById('instruction');
 
         function resizeCanvases() {
             paintCanvas.width = window.innerWidth;
@@ -97,7 +97,6 @@
         resizeCanvases();
 
         function getPalette() {
-            // Con il canvas specchiato, la destra visiva corrisponde a X vicine a 0 o coordinate specifiche
             const rightX = 80; 
             return [
                 { name: "Rosso", color: "#ff3333", x: rightX, y: 60, size: 45 },
@@ -120,7 +119,7 @@
         let lastX = null;
         let lastY = null;
         let isDrawing = false;
-        let pinchFramesCount = 0; // Sistema anti-sfarfallio per il pizzico
+        let pinchFramesCount = 0;
 
         function onResults(results) {
             outputCtx.save();
@@ -128,7 +127,7 @@
 
             const palette = getPalette();
 
-            // Disegna la palette (con testo specchiato compensato o leggibile)
+            // Disegna palette
             palette.forEach(item => {
                 outputCtx.beginPath();
                 outputCtx.arc(item.x, item.y, item.size / 2, 0, Math.PI * 2);
@@ -141,7 +140,7 @@
 
                 outputCtx.save();
                 outputCtx.translate(item.x + 35, item.y + 4);
-                outputCtx.scale(-1, 1); // Raddrizza il testo per farlo leggere bene nello specchio
+                outputCtx.scale(-1, 1);
                 outputCtx.fillStyle = "#ffffff";
                 outputCtx.font = "12px Courier New";
                 outputCtx.fillText(item.name, 0, 0);
@@ -151,17 +150,14 @@
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
 
-                // Disegna lo scheletro della mano in modo perfettamente allineato al video
                 drawConnectors(outputCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.5)', lineWidth: 2});
                 drawLandmarks(outputCtx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 3});
 
-                // Coordinate normalizzate per il canvas specchiato
                 const rawX = landmarks[8].x * window.innerWidth;
                 const rawY = landmarks[8].y * window.innerHeight;
                 const thumbX = landmarks[4].x * window.innerWidth;
                 const thumbY = landmarks[4].y * window.innerHeight;
 
-                // Smoothing fluido
                 if (smoothX === null || smoothY === null) {
                     smoothX = rawX;
                     smoothY = rawY;
@@ -171,9 +167,6 @@
                 }
 
                 const pinchDist = Math.hypot(smoothX - thumbX, smoothY - thumbY);
-                
-                // STABILIZZATORE PIZZICO: Richiede almeno 2 frame consecutivi per attivare/disattivare
-                // ed evita i micro-tagli improvvisi mentre disegni
                 let isPinchedNow = pinchDist < 50;
                 if (isPinchedNow) {
                     pinchFramesCount = Math.min(pinchFramesCount + 1, 5);
@@ -182,7 +175,6 @@
                 }
                 const isStablePinched = pinchFramesCount >= 2;
 
-                // Cursore sulla punta dell'indice
                 outputCtx.beginPath();
                 outputCtx.arc(smoothX, smoothY, 9, 0, Math.PI * 2);
                 outputCtx.fillStyle = isStablePinched ? "#00ffcc" : currentColor;
@@ -191,7 +183,6 @@
                 outputCtx.strokeStyle = "#ffffff";
                 outputCtx.stroke();
 
-                // Selezione colori
                 let selectingColor = false;
                 palette.forEach(item => {
                     const distToPalette = Math.hypot(smoothX - item.x, smoothY - item.y);
@@ -208,7 +199,6 @@
                     }
                 });
 
-                // Gestione del tratto continuo e stabile
                 if (isStablePinched && !selectingColor) {
                     if (!isDrawing) {
                         isDrawing = true;
@@ -253,29 +243,39 @@
             outputCtx.restore();
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
+        async function startApp() {
+            try {
+                const hands = new Hands({
+                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                });
 
-        hands.getOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.75,
-            minTrackingConfidence: 0.75
-        });
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.75,
+                    minTrackingConfidence: 0.75
+                });
 
-        hands.onResults(onResults);
+                hands.onResults(onResults);
 
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({ image: videoElement });
-            },
-            width: 1280,
-            height: 720,
-            facingMode: 'user'
-        });
-        camera.start();
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: 1280,
+                    height: 720,
+                    facingMode: 'user'
+                });
+                
+                await camera.start();
+                instructionEl.innerText = "USA L'INDICE • PIZZICO PER DISEGNARE • COLORI A DESTRA";
+            } catch (error) {
+                console.error(error);
+                instructionEl.innerText = "ERRORE: Controlla i permessi della webcam o usa un server locale.";
+            }
+        }
+
+        startApp();
     </script>
 </body>
 </html>
-
