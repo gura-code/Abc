@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive HUD & Hand Tracking</title>
-    <!-- Importazione delle librerie MediaPipe per il tracciamento e il disegno -->
+    <!-- Importazione librerie MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -21,7 +21,6 @@
             height: 100vh;
         }
 
-        /* HUD Panels */
         .hud-panel {
             position: absolute;
             border: 1px solid rgba(0, 255, 204, 0.3);
@@ -36,7 +35,7 @@
         #top-left { top: 20px; left: 20px; }
         #top-right { top: 20px; right: 20px; text-align: right; }
         
-        /* Video della webcam visibile in background con effetto trasparenza/stile HUD */
+        /* Video della webcam in background con specchiatura corretta */
         .input_video {
             position: absolute;
             top: 0;
@@ -44,23 +43,22 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* Specchia per effetto specchio naturale */
-            opacity: 0.35; /* Semi-trasparente per non coprire la grafica */
+            transform: scaleX(-1);
+            opacity: 0.3;
             z-index: 1;
         }
 
-        /* Canvas principale sopra la webcam per disegnare le linee delle dita e il cursore */
         #output_canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1); /* Specchiato per allinearsi alla webcam */
+            transform: scaleX(-1);
             z-index: 2;
         }
 
-        /* Cursore guidato dall'indice */
+        /* Cursore corretto che segue l'indice senza invertirsi */
         #custom-cursor {
             position: absolute;
             width: 24px;
@@ -87,43 +85,66 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 220px;
-            height: 110px;
-            border: 1px dashed rgba(0, 255, 204, 0.5);
+            width: 240px;
+            height: 120px;
+            border: 1px dashed rgba(0, 255, 204, 0.6);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
-            font-size: 14px;
+            font-size: 13px;
             z-index: 5;
             background: rgba(0, 255, 204, 0.05);
             pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        /* Pannello segreto che si sblocca dopo il click */
+        #secret-panel {
+            position: absolute;
+            top: 65%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            padding: 15px;
+            border: 1px solid #ff0055;
+            background: rgba(255, 0, 85, 0.1);
+            color: #ff0055;
+            font-size: 12px;
+            text-align: center;
+            z-index: 5;
+            display: none; /* Nascosto finché non fai il pinch */
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.3);
         }
     </style>
 </head>
 <body>
 
-    <!-- Pannelli di controllo visivi (HUD) -->
     <div id="top-left" class="hud-panel">
         SYSTEM: ONLINE<br>
-        CAMERA: FRONT (USER)<br>
         STATUS: <span id="status-text" style="color: #ff0055;">WAITING FOR HAND...</span>
     </div>
 
     <div id="top-right" class="hud-panel">
-        TRACKING: ACTIVE<br>
+        GESTURE: <span id="gesture-state" style="color: #00ffcc;">IDLE</span><br>
         COORD_X: <span id="coord-x">0</span> | COORD_Y: <span id="coord-y">0</span>
     </div>
 
     <!-- Box interattivo -->
     <div class="interactive-box" id="target-box">
-        TARGET ZONE<br>[ PINCH HERE ]
+        TARGET ZONE<br><br>[ PINCH TO UNLOCK ]
     </div>
 
-    <!-- Cursore interattivo -->
+    <!-- Pannello che appare dopo l'interazione -->
+    <div id="secret-panel">
+        ACCESS GRANTED!<br>
+        > PROTOCOL_LOADED: SUCCESS<br>
+        > WELCOME TO THE VIBE CODING WORLD
+    </div>
+
     <div id="custom-cursor"></div>
 
-    <!-- Elementi multimediali -->
     <video class="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
 
@@ -134,9 +155,13 @@
         const cursor = document.getElementById('custom-cursor');
         
         const statusText = document.getElementById('status-text');
+        const gestureState = document.getElementById('gesture-state');
         const coordXText = document.getElementById('coord-x');
         const coordYText = document.getElementById('coord-y');
         const targetBox = document.getElementById('target-box');
+        const secretPanel = document.getElementById('secret-panel');
+
+        let isUnlocked = false;
 
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
@@ -146,7 +171,6 @@
         resizeCanvas();
 
         function onResults(results) {
-            // Pulisci il canvas a ogni fotogramma
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -156,15 +180,15 @@
 
                 const landmarks = results.multiHandLandmarks[0];
 
-                // DISEGNA LE LINEE E I PUNTI SULLA MANO (Scheletro olografico)
+                // Disegna le lineette della mano
                 drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.6)', lineWidth: 2});
                 drawLandmarks(canvasCtx, landmarks, {color: '#ff0055', lineWidth: 1, radius: 3});
 
-                // Coordinate indice (punto 8) e pollice (punto 4)
                 const indexFinger = landmarks[8];
                 const thumb = landmarks[4];
 
-                const x = indexFinger.x * window.innerWidth;
+                // CORRETTO: Invertito l'asse X (1 - x) per far coincidere il cursore specchiato con il video
+                const x = (1 - indexFinger.x) * window.innerWidth;
                 const y = indexFinger.y * window.innerHeight;
 
                 coordXText.innerText = Math.round(x);
@@ -174,30 +198,45 @@
                 cursor.style.left = `${x}px`;
                 cursor.style.top = `${y}px`;
 
-                // Rilevamento Pinch (pizzico)
+                // Rilevamento Pinch
                 const distance = Math.hypot(
                     indexFinger.x - thumb.x,
                     indexFinger.y - thumb.y
                 );
 
+                const boxRect = targetBox.getBoundingClientRect();
+                const isInsideBox = (x >= boxRect.left && x <= boxRect.right && y >= boxRect.top && y <= boxRect.bottom);
+
                 if (distance < 0.05) {
                     cursor.classList.add('pinched');
-                    const boxRect = targetBox.getBoundingClientRect();
-                    if (x >= boxRect.left && x <= boxRect.right && y >= boxRect.top && y <= boxRect.bottom) {
-                        targetBox.style.backgroundColor = "rgba(255, 0, 85, 0.25)";
+                    gestureState.innerText = "PINCHING";
+                    gestureState.style.color = "#ff0055";
+
+                    // Se fai il pinch dentro la target zone, sblocchi il pannello segreto!
+                    if (isInsideBox && !isUnlocked) {
+                        isUnlocked = true;
+                        targetBox.style.backgroundColor = "rgba(255, 0, 85, 0.2)";
                         targetBox.style.borderColor = "#ff0055";
                         targetBox.style.color = "#ff0055";
+                        targetBox.innerHTML = "TARGET UNLOCKED<br><br>[ ACCESS ACTIVE ]";
+                        secretPanel.style.display = "block"; // Mostra il pannello segreto!
                     }
                 } else {
                     cursor.classList.remove('pinched');
-                    targetBox.style.backgroundColor = "rgba(0, 255, 204, 0.05)";
-                    targetBox.style.borderColor = "rgba(0, 255, 204, 0.5)";
-                    targetBox.style.color = "#00ffcc";
+                    gestureState.innerText = "TRACKING";
+                    gestureState.style.color = "#00ffcc";
+                    
+                    if (!isUnlocked) {
+                        targetBox.style.backgroundColor = "rgba(0, 255, 204, 0.05)";
+                        targetBox.style.borderColor = "rgba(0, 255, 204, 0.6)";
+                        targetBox.style.color = "#00ffcc";
+                    }
                 }
 
             } else {
                 statusText.innerText = "WAITING FOR HAND...";
                 statusText.style.color = "#ff0055";
+                gestureState.innerText = "IDLE";
                 coordXText.innerText = "0";
                 coordYText.innerText = "0";
             }
@@ -217,7 +256,6 @@
 
         hands.onResults(onResults);
 
-        // Avvio della webcam frontale con visualizzazione a schermo
         const camera = new Camera(videoElement, {
             onFrame: async () => {
                 await hands.send({ image: videoElement });
