@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retrolens Pro - Ultimate Edition</title>
+    <title>Retrolens Pro - Chest Mount Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -35,10 +35,7 @@
             overflow: hidden;
         }
 
-        /* Video e Canvas perfettamente proporzionati senza distorsioni */
-        video.input_video {
-            display: none;
-        }
+        video.input_video { display: none; }
 
         #output_canvas {
             position: absolute;
@@ -52,7 +49,6 @@
             transform: scaleX(-1);
         }
 
-        /* Overlay di stato in basso */
         #status-hud {
             position: absolute;
             bottom: 20px;
@@ -71,7 +67,6 @@
             white-space: nowrap;
         }
 
-        /* Pulsanti minimali in alto */
         .top-hud {
             position: absolute;
             top: 15px;
@@ -103,7 +98,6 @@
         }
         #download-btn:hover { background: #ff3399; }
 
-        /* Pannello Impostazioni a comparsa */
         #settings-panel {
             position: absolute;
             top: 0; right: -100%;
@@ -164,7 +158,6 @@
             vertical-align: middle;
         }
 
-        /* Messaggio errore / caricamento iniziale */
         #error-overlay {
             position: absolute;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -206,15 +199,13 @@
 </head>
 <body>
 
-    <!-- Schermata di errore / avvio in caso di problemi fotocamera -->
     <div id="error-overlay">
         <h2>RETROLENS PRO</h2>
-        <p id="error-msg">Inizializzazione della fotocamera in corso... Consenti l'accesso quando richiesto.</p>
+        <p id="error-msg">Inizializzazione fotocamera in corso...</p>
         <button class="hud-btn" id="retry-btn" onclick="initCamera()" style="display:none; padding: 10px 20px;">RIPROVA</button>
     </div>
 
     <div id="app-container">
-        <!-- HUD Superiore -->
         <div class="top-hud">
             <button class="hud-btn" id="download-btn" onclick="downloadImage()">💾 SALVA</button>
             <button class="hud-btn" onclick="toggleSettings()">⚙️ MENU</button>
@@ -224,11 +215,10 @@
         <div id="flash-overlay"></div>
 
         <video class="input_video" autoplay playsinline muted></video>
-        <canvas id="output_canvas" class="mirrored"></canvas>
+        <canvas id="output_canvas"></canvas>
 
         <div id="status-hud">STATO: <span id="status-text">AVVIAMENTO...</span></div>
 
-        <!-- Pannello Impostazioni -->
         <div id="settings-panel">
             <div class="settings-header">
                 <h3>IMPOSTAZIONI</h3>
@@ -237,14 +227,14 @@
 
             <div class="control-group">
                 <label>FOTOCAMERA:</label>
-                <button class="option-btn active" onclick="setCamera('user', this)">Frontale</button>
-                <button class="option-btn" onclick="setCamera('environment', this)">Retro</button>
+                <button class="option-btn" onclick="setCamera('user', this)">Frontale</button>
+                <button class="option-btn active" onclick="setCamera('environment', this)">Retro (Petto)</button>
             </div>
 
             <div class="control-group">
                 <label>EFFETTO SPECCHIO:</label>
-                <button class="option-btn active" onclick="setMirror(true, this)">Attivo</button>
-                <button class="option-btn" onclick="setMirror(false, this)">Disattivato</button>
+                <button class="option-btn" onclick="setMirror(true, this)">Attivo</button>
+                <button class="option-btn active" onclick="setMirror(false, this)">Disattivato</button>
             </div>
 
             <div class="control-group">
@@ -276,8 +266,8 @@
         const settingsPanel = document.getElementById('settings-panel');
 
         let currentMode = 'portal';
-        let currentFacingMode = 'user';
-        let isMirrored = true;
+        let currentFacingMode = 'environment'; // Di default partiamo con la posteriore per il petto
+        let isMirrored = false; // Spenta di default per la posteriore
         let accentColor = '#00ffcc';
         let isCountingDown = false;
         let cameraInstance = null;
@@ -297,6 +287,13 @@
             currentFacingMode = facing;
             document.querySelectorAll('#settings-panel .control-group:nth-child(1) .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
+            
+            // Se metti la frontale, attivi lo specchio in automatico; se metti la retro, lo spegni
+            if (facing === 'user') {
+                setMirror(true, document.querySelector('[onclick="setMirror(true, this)"]'));
+            } else {
+                setMirror(false, document.querySelector('[onclick="setMirror(false, this)"]'));
+            }
             initCamera();
         }
 
@@ -338,12 +335,11 @@
 
                     statusText.innerText = "FOTO SCATTATA!";
                     
-                    // Screenshot fedele al 100% di ciò che si vede sullo schermo
                     lastCapturedUrl = canvasElement.toDataURL('image/png', 1.0);
                     
                     const link = document.createElement('a');
                     link.href = lastCapturedUrl;
-                    link.download = `retrolens-${Date.now()}.png`;
+                    link.download = `retrolens-chest-${Date.now()}.png`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -358,7 +354,7 @@
             if (!lastCapturedUrl) return;
             const link = document.createElement('a');
             link.href = lastCapturedUrl;
-            link.download = `retrolens-${Date.now()}.png`;
+            link.download = `retrolens-chest-${Date.now()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -376,7 +372,7 @@
             const w = canvasElement.width;
             const h = canvasElement.height;
 
-            // Sfondo in bianco e nero nitido
+            // Sfondo in bianco e nero
             canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(85%)';
             canvasCtx.drawImage(results.image, 0, 0, w, h);
             canvasCtx.filter = 'none';
@@ -388,7 +384,12 @@
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const lm = results.multiHandLandmarks[i];
                     const avgX = lm.reduce((acc, pt) => acc + pt.x, 0) / lm.length;
-                    if (avgX < 0.5) { leftHand = lm; } else { rightHand = lm; }
+                    // In modalità posteriore invertiamo la logica sinistra/destra per coerenza visiva
+                    if (currentFacingMode === 'environment') {
+                        if (avgX > 0.5) { leftHand = lm; } else { rightHand = lm; }
+                    } else {
+                        if (avgX < 0.5) { leftHand = lm; } else { rightHand = lm; }
+                    }
                 }
 
                 if (!leftHand || !rightHand) {
@@ -396,7 +397,6 @@
                     rightHand = results.multiHandLandmarks[1];
                 }
 
-                // Controllo distanza pizzico (indice + pollice)
                 const distLeft = Math.hypot(leftHand[4].x - leftHand[8].x, leftHand[4].y - leftHand[8].y);
                 const distRight = Math.hypot(rightHand[4].x - rightHand[8].x, rightHand[4].y - rightHand[8].y);
 
@@ -414,7 +414,6 @@
                 const r_index = { x: rightHand[8].x * w, y: rightHand[8].y * h };
                 const r_thumb = { x: rightHand[4].x * w, y: rightHand[4].y * h };
 
-                // Maschera Portale
                 canvasCtx.save();
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(l_index.x, l_index.y);
@@ -437,7 +436,6 @@
                 canvasCtx.drawImage(results.image, 0, 0, w, h);
                 canvasCtx.restore();
 
-                // Cornice del portale
                 canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
                 canvasCtx.shadowBlur = 15;
@@ -451,7 +449,6 @@
                 canvasCtx.stroke();
                 canvasCtx.shadowBlur = 0;
 
-                // Linee geometriche interne
                 canvasCtx.strokeStyle = '#ffffff';
                 canvasCtx.lineWidth = 2;
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
@@ -459,7 +456,6 @@
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(l_index.x, l_index.y); canvasCtx.stroke();
                 canvasCtx.beginPath(); canvasCtx.moveTo(r_thumb.x, r_thumb.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
 
-                // Scheletro completo delle mani visibile anche nella foto finale
                 [leftHand, rightHand].forEach(hand => {
                     drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: accentColor, lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 1, radius: 2});
@@ -481,8 +477,8 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.6
+            minDetectionConfidence: 0.5, // Leggermente abbassata per aiutare la telecamera posteriore vicina al corpo
+            minTrackingConfidence: 0.5
         });
 
         hands.onResults(onResults);
@@ -509,13 +505,12 @@
                 errorOverlay.style.display = 'none';
             } catch (err) {
                 console.error("Errore fotocamera:", err);
-                errorMsg.innerText = "Impossibile accedere alla fotocamera. Assicurati di aver dato i permessi e di non avere altre app che la stanno utilizzando.\n\nDettaglio: " + err.message;
+                errorMsg.innerText = "Impossibile accedere alla fotocamera posteriore. Controlla i permessi o se un'altra app la sta bloccando.\n\nDettaglio: " + err.message;
                 retryBtn.style.display = 'inline-block';
                 errorOverlay.style.display = 'flex';
             }
         }
 
-        // Avvio automatico al caricamento della pagina
         initCamera();
     </script>
 </body>
