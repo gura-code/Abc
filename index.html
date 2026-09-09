@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retrolens 3D Hand Mesh - TikTok Trend</title>
+    <title>Retrolens Precise Finger Mesh - TikTok Trend</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -52,9 +52,7 @@
             font-weight: bold;
         }
 
-        .input_video {
-            display: none;
-        }
+        .input_video { display: none; }
 
         #output_canvas {
             position: absolute;
@@ -68,7 +66,7 @@
 <body>
 
     <div class="hud-top">
-        <h4>RETROLENS 3D PORTAL FX</h4>
+        <h4>PRECISE FINGER MESH FX</h4>
         <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">MODALITÀ: <span style="color: #00ffcc;">FINESTRA A COLORI</span></div>
         <div>
             <button class="filter-btn active" onclick="setMode('portal')">Finestra Colore</button>
@@ -116,31 +114,37 @@
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.filter = 'none';
 
-            // 2. Se ci sono entrambe le mani, creiamo il portale agganciato alle punte delle dita
+            // 2. Se ci sono entrambe le mani, calcoliamo i punti esatti delle dita richieste:
+            // Indice = punto 8, Pollice = punto 4
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
-                const h1 = results.multiHandLandmarks[0];
-                const h2 = results.multiHandLandmarks[1];
+                // Ordiniamo le mani in base alla posizione X sullo schermo per stabilità (Sinistra/Destra)
+                let h1 = results.multiHandLandmarks[0];
+                let h2 = results.multiHandLandmarks[1];
 
-                // Punte delle dita esatte: Indice (8) e Mignolo (20) o Polso per base
-                // Usiamo l'indice (8) e il mignolo (20) di entrambe le mani per fare un rettangolo perfetto tra le punte
-                const p1_top = { x: (1 - h1[8].x) * canvasElement.width, y: h1[8].y * canvasElement.height };
-                const p1_bottom = { x: (1 - h1[20].x) * canvasElement.width, y: h1[20].y * canvasElement.height };
-                
-                const p2_top = { x: (1 - h2[8].x) * canvasElement.width, y: h2[8].y * canvasElement.height };
-                const p2_bottom = { x: (1 - h2[20].x) * canvasElement.width, y: h2[20].y * canvasElement.height };
+                // Punte dita mano 1
+                const h1_index = { x: (1 - h1[8].x) * canvasElement.width, y: h1[8].y * canvasElement.height };
+                const h1_thumb = { x: (1 - h1[4].x) * canvasElement.width, y: h1[4].y * canvasElement.height };
+
+                // Punte dita mano 2
+                const h2_index = { x: (1 - h2[8].x) * canvasElement.width, y: h2[8].y * canvasElement.height };
+                const h2_thumb = { x: (1 - h2[4].x) * canvasElement.width, y: h2[4].y * canvasElement.height };
 
                 canvasCtx.save();
                 canvasCtx.beginPath();
-                canvasCtx.moveTo(p1_top.x, p1_top.y);
-                canvasCtx.lineTo(p2_top.x, p2_top.y);
-                canvasCtx.lineTo(p2_bottom.x, p2_bottom.y);
-                canvasCtx.lineTo(p1_bottom.x, p1_bottom.y);
+                // Percorso geometrico basato esattamente su:
+                // - Indice mano 1 a Indice mano 2
+                // - Indice mano 2 a Pollice mano 2
+                // - Pollice mano 2 a Pollice mano 1
+                // - Pollice mano 1 a Indice mano 1 (chiusura del perimetro)
+                canvasCtx.moveTo(h1_index.x, h1_index.y);
+                canvasCtx.lineTo(h2_index.x, h2_index.y);
+                canvasCtx.lineTo(h2_thumb.x, h2_thumb.y);
+                canvasCtx.lineTo(h1_thumb.x, h1_thumb.y);
                 canvasCtx.closePath();
 
-                // Ritaglia la mesh per mostrare i colori originali (o il filtro) solo al suo interno
+                // Ritaglio per isolare i colori reali (o il filtro) solo dentro questo poligono
                 canvasCtx.clip();
 
-                // Disegna l'immagine a colori originali dentro il portale
                 if (currentMode === 'portal') {
                     canvasCtx.filter = 'saturate(180%) contrast(120%)';
                 } else if (currentMode === 'inverted') {
@@ -152,33 +156,46 @@
                 canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                 canvasCtx.restore();
 
-                // 3. Cornice wireframe luminosa e futuristica attorno alla mesh delle dita
+                // 3. Cornice wireframe luminosa tracciata millimetricamente sulle punte esatte
                 canvasCtx.strokeStyle = '#00ffcc';
                 canvasCtx.lineWidth = 3;
                 canvasCtx.shadowBlur = 18;
                 canvasCtx.shadowColor = '#00ffcc';
                 canvasCtx.beginPath();
-                canvasCtx.moveTo(p1_top.x, p1_top.y);
-                canvasCtx.lineTo(p2_top.x, p2_top.y);
-                canvasCtx.lineTo(p2_bottom.x, p2_bottom.y);
-                canvasCtx.lineTo(p1_bottom.x, p1_bottom.y);
+                canvasCtx.moveTo(h1_index.x, h1_index.y);
+                canvasCtx.lineTo(h2_index.x, h2_index.y);
+                canvasCtx.lineTo(h2_thumb.x, h2_thumb.y);
+                canvasCtx.lineTo(h1_thumb.x, h1_thumb.y);
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
-                // Disegna i punti di tracking sulle mani per un look super tecnologico
+                // Evidenzia con linee dedicate i collegamenti richiesti (Indice-Indice e Pollice-Pollice)
+                canvasCtx.strokeStyle = '#ff007f';
+                canvasCtx.lineWidth = 2;
+                // Indice <-> Indice
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(h1_index.x, h1_index.y);
+                canvasCtx.lineTo(h2_index.x, h2_index.y);
+                canvasCtx.stroke();
+                // Pollice <-> Pollice
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(h1_thumb.x, h1_thumb.y);
+                canvasCtx.lineTo(h2_thumb.x, h2_thumb.y);
+                canvasCtx.stroke();
+
+                // Disegna i punti di tracking sulle mani
                 [h1, h2].forEach(hand => {
-                    drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.5)', lineWidth: 1});
+                    drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.3)', lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ff007f', lineWidth: 1, radius: 2});
                 });
 
             } else {
-                // Messaggio guida se c'è una sola mano
                 canvasCtx.fillStyle = '#00ffcc';
                 canvasCtx.font = '15px Courier New';
                 canvasCtx.textAlign = 'center';
                 canvasCtx.shadowBlur = 10;
                 canvasCtx.shadowColor = '#00ffcc';
-                canvasCtx.fillText("AVVICINA ENTRAMBE LE MANI PER APRIRE IL PORTALE", canvasElement.width / 2, canvasElement.height - 50);
+                canvasCtx.fillText("avvicina indici e pollici di entrambe le mani", canvasElement.width / 2, canvasElement.height - 50);
             }
 
             canvasCtx.restore();
