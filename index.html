@@ -207,7 +207,6 @@
         let isCountingDown = false;
         let cameraInstance = null;
         let lastCapturedDataUrl = null;
-        let lastProcessedResults = null;
 
         function setMode(mode, btn) {
             currentMode = mode;
@@ -266,111 +265,6 @@
         window.addEventListener('resize', () => setAspectRatio(currentAspect, null));
         resizeCanvas();
 
-        // Funzione per generare il file finale pulito rispettando proporzioni e specchio scelti
-        function generateExportImage() {
-            if (!lastProcessedResults || !lastProcessedResults.image) return canvasElement.toDataURL('image/png', 1.0);
-
-            // Crea un canvas offline con le proporzioni esatte del contenitore visibile
-            const exportCanvas = document.createElement('canvas');
-            const exportCtx = exportCanvas.getContext('2d');
-            
-            let targetWidth = 1920;
-            let targetHeight = 1080;
-
-            if (currentAspect === '1:1') { targetWidth = 1080; targetHeight = 1080; }
-            else if (currentAspect === '9:16') { targetWidth = 1080; targetHeight = 1920; }
-            else if (currentAspect === '16:9') { targetWidth = 1920; targetHeight = 1080; }
-            else if (currentAspect === '4:3') { targetWidth = 1440; targetHeight = 1080; }
-            else {
-                targetWidth = window.innerWidth * window.devicePixelRatio;
-                targetHeight = window.innerHeight * window.devicePixelRatio;
-            }
-
-            exportCanvas.width = targetWidth;
-            exportCanvas.height = targetHeight;
-
-            exportCtx.save();
-            // Applica l'effetto specchio solo se attivo
-            if (isMirrored) {
-                exportCtx.translate(targetWidth, 0);
-                exportCtx.scale(-1, 1);
-            }
-
-            // Disegna l'immagine di sfondo fedele al frame senza schiacciarla (object-fit: cover simulato)
-            const img = lastProcessedResults.image;
-            const sRatio = img.width / img.height;
-            const tRatio = targetWidth / targetHeight;
-            let dW = targetWidth, dH = targetHeight, dX = 0, dY = 0;
-
-            if (sRatio > tRatio) {
-                dW = targetHeight * sRatio;
-                dX = (targetWidth - dW) / 2;
-            } else {
-                dH = targetWidth / sRatio;
-                dY = (targetHeight - dH) / 2;
-            }
-
-            exportCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
-            exportCtx.drawImage(img, dX, dY, dW, dH);
-            exportCtx.filter = 'none';
-
-            // Ridisegna gli effetti mani/portale se presenti nell'ultimo frame elaborato
-            const results = lastProcessedResults;
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
-                let leftHand = null;
-                let rightHand = null;
-
-                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-                    const landmarks = results.multiHandLandmarks[i];
-                    const avgX = landmarks.reduce((acc, pt) => acc + pt.x, 0) / landmarks.length;
-                    if (avgX < 0.5) { leftHand = landmarks; } else { rightHand = landmarks; }
-                }
-                if (!leftHand || !rightHand) {
-                    leftHand = results.multiHandLandmarks[0];
-                    rightHand = results.multiHandLandmarks[1];
-                }
-
-                const l_index = { x: leftHand[8].x * targetWidth, y: leftHand[8].y * targetHeight };
-                const l_thumb = { x: leftHand[4].x * targetWidth, y: leftHand[4].y * targetHeight };
-                const r_index = { x: rightHand[8].x * targetWidth, y: rightHand[8].y * targetHeight };
-                const r_thumb = { x: rightHand[4].x * targetWidth, y: rightHand[4].y * targetHeight };
-
-                exportCtx.save();
-                exportCtx.beginPath();
-                exportCtx.moveTo(l_index.x, l_index.y);
-                exportCtx.lineTo(r_index.x, r_index.y);
-                exportCtx.lineTo(r_thumb.x, r_thumb.y);
-                exportCtx.lineTo(l_thumb.x, l_thumb.y);
-                exportCtx.closePath();
-                exportCtx.clip();
-
-                if (currentMode === 'portal') {
-                    exportCtx.filter = 'saturate(180%) contrast(120%)';
-                } else if (currentMode === 'inverted') {
-                    exportCtx.filter = 'invert(100%) saturate(200%)';
-                } else if (currentMode === 'neon') {
-                    exportCtx.filter = 'hue-rotate(120deg) saturate(300%) contrast(150%)';
-                }
-                exportCtx.drawImage(img, dX, dY, dW, dH);
-                exportCtx.restore();
-
-                exportCtx.strokeStyle = accentColor;
-                exportCtx.lineWidth = 4;
-                exportCtx.shadowBlur = 20;
-                exportCtx.shadowColor = accentColor;
-                exportCtx.beginPath();
-                exportCtx.moveTo(l_index.x, l_index.y);
-                exportCtx.lineTo(r_index.x, r_index.y);
-                exportCtx.lineTo(r_thumb.x, r_thumb.y);
-                exportCtx.lineTo(l_thumb.x, l_thumb.y);
-                exportCtx.closePath();
-                exportCtx.stroke();
-            }
-
-            exportCtx.restore();
-            return exportCanvas.toDataURL('image/png', 1.0);
-        }
-
         function triggerCapture() {
             if (isCountingDown) return;
             isCountingDown = true;
@@ -395,7 +289,8 @@
                     document.getElementById('status-text').innerHTML = `STATO: <span style="color: ${accentColor};">FOTO SCATTATA!</span>`;
 
                     setTimeout(() => {
-                        lastCapturedDataUrl = generateExportImage();
+                        // SCREENSHOT ESATTO: Prende direttamente quello che c'è sul canvas attivo senza ricalcolare nulla
+                        lastCapturedDataUrl = canvasElement.toDataURL('image/png', 1.0);
                         
                         const link = document.createElement('a');
                         link.href = lastCapturedDataUrl;
@@ -422,7 +317,6 @@
         }
 
         function onResults(results) {
-            lastProcessedResults = results;
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -434,6 +328,7 @@
             const scaleX = canvasElement.width;
             const scaleY = canvasElement.height;
 
+            // Sfondo in bianco e nero
             canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
             canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
             canvasCtx.filter = 'none';
@@ -488,6 +383,7 @@
                 canvasCtx.drawImage(results.image, 0, 0, scaleX, scaleY);
                 canvasCtx.restore();
 
+                // Cornice del portale
                 canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
                 canvasCtx.shadowBlur = 20;
@@ -500,6 +396,7 @@
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
+                // Linee interne geometriche
                 canvasCtx.strokeStyle = '#ffffff';
                 canvasCtx.lineWidth = 2;
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
@@ -507,6 +404,7 @@
                 canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(l_index.x, l_index.y); canvasCtx.stroke();
                 canvasCtx.beginPath(); canvasCtx.moveTo(r_thumb.x, r_thumb.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
 
+                // Disegno esatto dello scheletro delle mani (puntini e linee) anche sulla foto finale
                 [leftHand, rightHand].forEach(hand => {
                     drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: accentColor, lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ffffff', lineWidth: 1, radius: 2});
