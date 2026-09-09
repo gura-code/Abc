@@ -114,35 +114,45 @@
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.filter = 'none';
 
-            // 2. Se ci sono entrambe le mani, calcoliamo i punti esatti delle dita richieste:
-            // Indice = punto 8, Pollice = punto 4
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
-                // Ordiniamo le mani in base alla posizione X sullo schermo per stabilità (Sinistra/Destra)
-                let h1 = results.multiHandLandmarks[0];
-                let h2 = results.multiHandLandmarks[1];
+            // 2. Se ci sono entrambe le mani, distinguiamo correttamente la destra e la sinistra
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2 && results.multiHandedness) {
+                let leftHand = null;
+                let rightHand = null;
 
-                // Punte dita mano 1
-                const h1_index = { x: (1 - h1[8].x) * canvasElement.width, y: h1[8].y * canvasElement.height };
-                const h1_thumb = { x: (1 - h1[4].x) * canvasElement.width, y: h1[4].y * canvasElement.height };
+                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                    const label = results.multiHandedness[i].label; // 'Left' o 'Right' dal punto di vista della telecamera
+                    // Poiché il video è specchiato, invertiamo l'etichetta per corrispondere alla realtà fisica dell'utente
+                    if (label === 'Right') {
+                        leftHand = results.multiHandLandmarks[i]; // Quella che appare a destra nello specchio è la sinistra dell'utente
+                    } else {
+                        rightHand = results.multiHandLandmarks[i]; // Quella che appare a sinistra è la destra dell'utente
+                    }
+                }
 
-                // Punte dita mano 2
-                const h2_index = { x: (1 - h2[8].x) * canvasElement.width, y: h2[8].y * canvasElement.height };
-                const h2_thumb = { x: (1 - h2[4].x) * canvasElement.width, y: h2[4].y * canvasElement.height };
+                // Fallback nel caso in cui MediaPipe etichetti in modo anomalo
+                if (!leftHand || !rightHand) {
+                    leftHand = results.multiHandLandmarks[0];
+                    rightHand = results.multiHandLandmarks[1];
+                }
+
+                // Punte dita Mano Sinistra (Indice = 8, Pollice = 4)
+                const l_index = { x: (1 - leftHand[8].x) * canvasElement.width, y: leftHand[8].y * canvasElement.height };
+                const l_thumb = { x: (1 - leftHand[4].x) * canvasElement.width, y: leftHand[4].y * canvasElement.height };
+
+                // Punte dita Mano Destra (Indice = 8, Pollice = 4)
+                const r_index = { x: (1 - rightHand[8].x) * canvasElement.width, y: rightHand[8].y * canvasElement.height };
+                const r_thumb = { x: (1 - rightHand[4].x) * canvasElement.width, y: rightHand[4].y * canvasElement.height };
 
                 canvasCtx.save();
                 canvasCtx.beginPath();
-                // Percorso geometrico basato esattamente su:
-                // - Indice mano 1 a Indice mano 2
-                // - Indice mano 2 a Pollice mano 2
-                // - Pollice mano 2 a Pollice mano 1
-                // - Pollice mano 1 a Indice mano 1 (chiusura del perimetro)
-                canvasCtx.moveTo(h1_index.x, h1_index.y);
-                canvasCtx.lineTo(h2_index.x, h2_index.y);
-                canvasCtx.lineTo(h2_thumb.x, h2_thumb.y);
-                canvasCtx.lineTo(h1_thumb.x, h1_thumb.y);
+                // Connessione corretta: Indice Sinistra -> Indice Destra -> Pollice Destra -> Pollice Sinistra -> Chiusura
+                canvasCtx.moveTo(l_index.x, l_index.y);
+                canvasCtx.lineTo(r_index.x, r_index.y);
+                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
+                canvasCtx.lineTo(l_thumb.x, l_thumb.y);
                 canvasCtx.closePath();
 
-                // Ritaglio per isolare i colori reali (o il filtro) solo dentro questo poligono
+                // Ritaglio per isolare i colori reali solo dentro il poligono
                 canvasCtx.clip();
 
                 if (currentMode === 'portal') {
@@ -156,35 +166,35 @@
                 canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                 canvasCtx.restore();
 
-                // 3. Cornice wireframe luminosa tracciata millimetricamente sulle punte esatte
+                // 3. Cornice wireframe luminosa tracciata sulle punte
                 canvasCtx.strokeStyle = '#00ffcc';
                 canvasCtx.lineWidth = 3;
                 canvasCtx.shadowBlur = 18;
                 canvasCtx.shadowColor = '#00ffcc';
                 canvasCtx.beginPath();
-                canvasCtx.moveTo(h1_index.x, h1_index.y);
-                canvasCtx.lineTo(h2_index.x, h2_index.y);
-                canvasCtx.lineTo(h2_thumb.x, h2_thumb.y);
-                canvasCtx.lineTo(h1_thumb.x, h1_thumb.y);
+                canvasCtx.moveTo(l_index.x, l_index.y);
+                canvasCtx.lineTo(r_index.x, r_index.y);
+                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
+                canvasCtx.lineTo(l_thumb.x, l_thumb.y);
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
-                // Evidenzia con linee dedicate i collegamenti richiesti (Indice-Indice e Pollice-Pollice)
+                // Linee evidenziate per i collegamenti specifici
                 canvasCtx.strokeStyle = '#ff007f';
                 canvasCtx.lineWidth = 2;
                 // Indice <-> Indice
                 canvasCtx.beginPath();
-                canvasCtx.moveTo(h1_index.x, h1_index.y);
-                canvasCtx.lineTo(h2_index.x, h2_index.y);
+                canvasCtx.moveTo(l_index.x, l_index.y);
+                canvasCtx.lineTo(r_index.x, r_index.y);
                 canvasCtx.stroke();
                 // Pollice <-> Pollice
                 canvasCtx.beginPath();
-                canvasCtx.moveTo(h1_thumb.x, h1_thumb.y);
-                canvasCtx.lineTo(h2_thumb.x, h2_thumb.y);
+                canvasCtx.moveTo(l_thumb.x, l_thumb.y);
+                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
                 canvasCtx.stroke();
 
-                // Disegna i punti di tracking sulle mani
-                [h1, h2].forEach(hand => {
+                // Disegna lo scheletro delle mani
+                results.multiHandLandmarks.forEach(hand => {
                     drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.3)', lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ff007f', lineWidth: 1, radius: 2});
                 });
@@ -226,3 +236,4 @@
     </script>
 </body>
 </html>
+
