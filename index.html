@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive HUD & Gesture Control</title>
+    <!-- Importazione delle librerie MediaPipe per il tracciamento delle mani -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <style>
+        /* Stile Minimalista / Dark / Cyberpunk (#0E0E0E) */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0E0E0E;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* HUD Panels & Layout */
+        .hud-panel {
+            position: absolute;
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            background: rgba(14, 14, 14, 0.7);
+            padding: 10px 15px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #top-left { top: 20px; left: 20px; }
+        #top-right { top: 20px; right: 20px; text-align: right; }
+        
+        /* Video della webcam nascosto alla vista diretta ma attivo per l'AI */
+        .input_video {
+            display: none;
+        }
+
+        /* Canvas principale dove disegniamo e mostriamo il tracciamento */
+        #output_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Specchia l'immagine per un movimento naturale */
+            z-index: 1;
+        }
+
+        /* Cursore personalizzato guidato dall'indice */
+        #custom-cursor {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00ffcc;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+            transition: background-color 0.1s, transform 0.1s;
+            box-shadow: 0 0 10px #00ffcc;
+        }
+
+        #custom-cursor.pinched {
+            background-color: #ff0055;
+            border-color: #ff0055;
+            transform: translate(-50%, -50%) scale(0.6);
+            box-shadow: 0 0 15px #ff0055;
+        }
+
+        /* Elemento interattivo di prova sullo schermo */
+        .interactive-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 100px;
+            border: 1px dashed rgba(0, 255, 204, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 14px;
+            z-index: 5;
+            background: rgba(0, 255, 204, 0.03);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HUD Informativi in stile visivo -->
+    <div id="top-left" class="hud-panel">
+        SYSTEM: ONLINE<br>
+        MODULE: HAND_TRACKING_V2<br>
+        STATUS: <span id="status-text" style="color: #ff0055;">WAITING FOR HAND...</span>
+    </div>
+
+    <div id="top-right" class="hud-panel">
+        FRAME_RATE: 60 FPS<br>
+        COORD_X: <span id="coord-x">0</span> | COORD_Y: <span id="coord-y">0</span>
+    </div>
+
+    <!-- Box centrale interattivo -->
+    <div class="interactive-box" id="target-box">
+        TARGET ZONE<br>[ PINCH HERE ]
+    </div>
+
+    <!-- Cursore controllato dalle dita -->
+    <div id="custom-cursor"></div>
+
+    <!-- Elementi tecnici per la webcam e MediaPipe -->
+    <video class="input_video" autoplay playsinline></video>
+    <canvas id="output_canvas"></canvas>
+
+    <script>
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const cursor = document.getElementById('custom-cursor');
+        
+        const statusText = document.getElementById('status-text');
+        const coordXText = document.getElementById('coord-x');
+        const coordYText = document.getElementById('coord-y');
+        const targetBox = document.getElementById('target-box');
+
+        // Imposta la risoluzione del canvas in base alla finestra
+        function resizeCanvas() {
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function onResults(results) {
+            // Pulisci il canvas a ogni fotogramma
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                statusText.innerText = "HAND DETECTED";
+                statusText.style.color = "#00ffcc";
+
+                // Prendi la prima mano rilevata
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Coordinate del dito indice (punto 8)
+                const indexFinger = landmarks[8];
+                // Coordinate del pollice (punto 4)
+                const thumb = landmarks[4];
+
+                // Converti le coordinate normalizzate (0-1) in pixel dello schermo
+                const x = indexFinger.x * window.innerWidth;
+                const y = indexFinger.y * window.innerHeight;
+
+                // Aggiorna i testi HUD delle coordinate
+                coordXText.innerText = Math.round(x);
+                coordYText.innerText = Math.round(y);
+
+                // Muovi il cursore personalizzato
+                cursor.style.left = `${x}px`;
+                cursor.style.top = `${y}px`;
+
+                // Calcola la distanza tra pollice e indice per rilevare il "Pinch" (pizzico)
+                const distance = Math.hypot(
+                    indexFinger.x - thumb.x,
+                    indexFinger.y - thumb.y
+                );
+
+                // Se la distanza è minima, considera il gesto come un "clic/pizzico"
+                const pinchThreshold = 0.05;
+                if (distance < pinchThreshold) {
+                    cursor.classList.add('pinched');
+                    
+                    // Controlla se il cursore è dentro la "Target Zone" centrale
+                    const boxRect = targetBox.getBoundingClientRect();
+                    if (x >= boxRect.left && x <= boxRect.right && y >= boxRect.top && y <= boxRect.bottom) {
+                        targetBox.style.backgroundColor = "rgba(255, 0, 85, 0.2)";
+                        targetBox.style.borderColor = "#ff0055";
+                        targetBox.style.color = "#ff0055";
+                    }
+                } else {
+                    cursor.classList.remove('pinched');
+                    targetBox.style.backgroundColor = "rgba(0, 255, 204, 0.03)";
+                    targetBox.style.borderColor = "rgba(0, 255, 204, 0.5)";
+                    targetBox.style.color = "#00ffcc";
+                }
+
+                // Opzionale: disegna i punti di scheletro della mano sullo sfondo in stile olografico
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.2)', lineWidth: 1});
+                drawLandmarks(canvasCtx, landmarks, {color: '#ff0055', lineWidth: 1, radius: 2});
+
+            } else {
+                statusText.innerText = "WAITING FOR HAND...";
+                statusText.style.color = "#ff0055";
+                coordXText.innerText = "0";
+                coordYText.innerText = "0";
+            }
+            canvasCtx.restore();
+        }
+
+        // Configurazione di MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onResults);
+
+        // Avvio della webcam tramite MediaPipe Camera Utils
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+        camera.start();
+    </script>
+</body>
+</html>
