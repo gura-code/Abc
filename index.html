@@ -3,28 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COSMIC-S // Full Body System v2</title>
+    <title>COSMIC-S // Full Body System v3</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 
     <style>
         :root {
             --bg-color: #0E0E0E;
-            --accent-green: #00FF66;
-            --accent-pink: #FF3366;
-            --accent-cyan: #00E5FF;
-            --text-color: #F0F0F0;
-            --panel-bg: rgba(15, 15, 15, 0.85);
         }
 
         body {
             margin: 0;
             padding: 0;
             background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Space Grotesk', sans-serif;
             width: 100vw;
             height: 100vh;
             overflow: hidden;
@@ -50,102 +42,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1); /* Specchio */
-        }
-
-        .hud-top {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: var(--panel-bg);
-            padding: 15px 25px;
-            border-radius: 10px;
-            border: 1px solid #333;
-            backdrop-filter: blur(8px);
-            z-index: 10;
-        }
-
-        .hud-top h1 {
-            margin: 0 0 5px 0;
-            font-size: 18px;
-            letter-spacing: 2px;
-            color: var(--accent-green);
-        }
-
-        .hud-top p {
-            margin: 0;
-            font-size: 13px;
-            color: #888;
-        }
-
-        .hud-scores {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            gap: 15px;
-            z-index: 10;
-        }
-
-        .score-box {
-            background: var(--panel-bg);
-            padding: 12px 20px;
-            border-radius: 10px;
-            border: 1px solid #333;
-            text-align: center;
-            backdrop-filter: blur(8px);
-        }
-
-        .score-box span {
-            display: block;
-            font-size: 20px;
-            font-weight: 600;
-        }
-
-        .score-box.left span { color: var(--accent-cyan); }
-        .score-box.right span { color: var(--accent-pink); }
-        .score-box label { font-size: 10px; color: #777; letter-spacing: 1px; }
-
-        .mission-panel {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--panel-bg);
-            padding: 12px 30px;
-            border-radius: 30px;
-            border: 1px solid #333;
-            font-size: 14px;
-            letter-spacing: 1px;
-            color: var(--accent-green);
-            z-index: 10;
-            backdrop-filter: blur(8px);
+            transform: scaleX(-1); /* Specchio per il movimento naturale */
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <div class="hud-top">
-            <h1>COSMIC-S // ACTIVE BODY</h1>
-            <p>Stato: <span id="status">In attesa calibrazione...</span></p>
-        </div>
-        
-        <div class="hud-scores">
-            <div class="score-box left">
-                <label>MANO SX</label>
-                <span id="score-left">0</span>
-            </div>
-            <div class="score-box right">
-                <label>MANO DX</label>
-                <span id="score-right">0</span>
-            </div>
-        </div>
-
-        <div class="mission-panel" id="mission-text">
-            MUOVITI: Raggiungi i cerchi con entrambe le mani!
-        </div>
-
         <video id="webcam" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
     </div>
@@ -154,19 +57,12 @@
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const statusEl = document.getElementById('status');
-        const scoreLeftEl = document.getElementById('score-left');
-        const scoreRightEl = document.getElementById('score-right');
-        const missionEl = document.getElementById('mission-text');
 
-        let scoreL = 0;
-        let scoreR = 0;
+        // Bersagli: Mano SX (Ciano), Mano DX (Rosa), Testa (Verde)
+        let targetLeft = { x: 300, y: 300, radius: 40, color: '#00E5FF' };
+        let targetRight = { x: 800, y: 300, radius: 40, color: '#FF3366' };
+        let targetHead = { x: 600, y: 200, radius: 35, color: '#00FF66' };
 
-        // Bersagli separati per mano sinistra e mano destra
-        let targetLeft = { x: 300, y: 300, radius: 35, color: '#00E5FF' };
-        let targetRight = { x: 800, y: 300, radius: 35, color: '#FF3366' };
-
-        // Effetti particellari visivi
         let particles = [];
 
         function resizeCanvas() {
@@ -179,34 +75,33 @@
         function resetTargets() {
             const w = canvasElement.width;
             const h = canvasElement.height;
-            targetLeft.x = Math.random() * (w * 0.4) + 100;
-            targetLeft.y = Math.random() * (h * 0.6) + 150;
-            targetRight.x = Math.random() * (w * 0.4) + (w * 0.5);
-            targetRight.y = Math.random() * (h * 0.6) + 150;
+            // Posizioni logiche corrette (Mano sinistra a sinistra, mano destra a destra)
+            targetLeft.x = Math.random() * (w * 0.35) + 80;
+            targetLeft.y = Math.random() * (h * 0.5) + 150;
+
+            targetRight.x = Math.random() * (w * 0.35) + (w * 0.6);
+            targetRight.y = Math.random() * (h * 0.5) + 150;
+
+            targetHead.x = Math.random() * (w * 0.4) + (w * 0.3);
+            targetHead.y = Math.random() * (h * 0.3) + 100;
         }
 
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Disegna webcam a schermo intero
+            // Disegna la webcam a schermo intero
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
             if (results.poseLandmarks) {
-                statusEl.innerText = "SISTEMA ONLINE // ATTIVO";
-                statusEl.style.color = "#00FF66";
-
                 drawAdvancedSkeleton(results.poseLandmarks);
 
-                // Landmark 15 = Mano Sinistra, Landmark 16 = Mano Destra
-                checkInteraction(results.poseLandmarks[15], targetLeft, 'left');
-                checkInteraction(results.poseLandmarks[16], targetRight, 'right');
-            } else {
-                statusEl.innerText = "CERCA INQUADRATURA...";
-                statusEl.style.color = "#FF3333";
+                // Landmark 15 = Mano Sinistra, 16 = Mano Destra, 0 = Naso/Testa
+                checkInteraction(results.poseLandmarks[15], targetLeft);
+                checkInteraction(results.poseLandmarks[16], targetRight);
+                checkInteraction(results.poseLandmarks[0], targetHead);
             }
 
-            // Disegna elementi di gioco
             drawTargets();
             updateAndDrawParticles();
 
@@ -223,8 +118,7 @@
                 [23, 25], [25, 27], [24, 26], [26, 28]           // Gambe
             ];
 
-            // Linee scheletro
-            canvasCtx.strokeStyle = 'rgba(0, 255, 102, 0.7)';
+            canvasCtx.strokeStyle = 'rgba(0, 255, 102, 0.6)';
             canvasCtx.lineWidth = 4;
 
             connections.forEach(([i, j]) => {
@@ -238,72 +132,55 @@
                 }
             });
 
-            // Punti nodali luminosi
             landmarks.forEach((p, idx) => {
-                if (p.visibility > 0.5 && (idx >= 11)) {
+                if (p.visibility > 0.5 && idx >= 11) {
                     canvasCtx.fillStyle = '#FFFFFF';
                     canvasCtx.beginPath();
-                    canvasCtx.arc(p.x * w, p.y * h, 5, 0, 2 * Math.PI);
+                    canvasCtx.arc(p.x * w, p.y * h, 4, 0, 2 * Math.PI);
                     canvasCtx.fill();
                 }
             });
         }
 
         function drawTargets() {
-            // Target Sinistro (Cyan)
-            canvasCtx.strokeStyle = targetLeft.color;
-            canvasCtx.lineWidth = 4;
-            canvasCtx.beginPath();
-            canvasCtx.arc(targetLeft.x, targetLeft.y, targetLeft.radius, 0, 2 * Math.PI);
-            canvasCtx.stroke();
-            canvasCtx.fillStyle = 'rgba(0, 229, 255, 0.2)';
-            canvasCtx.fill();
-
-            // Target Destro (Pink)
-            canvasCtx.strokeStyle = targetRight.color;
-            canvasCtx.lineWidth = 4;
-            canvasCtx.beginPath();
-            canvasCtx.arc(targetRight.x, targetRight.y, targetRight.radius, 0, 2 * Math.PI);
-            canvasCtx.stroke();
-            canvasCtx.fillStyle = 'rgba(255, 51, 102, 0.2)';
-            canvasCtx.fill();
+            [targetLeft, targetRight, targetHead].forEach(t => {
+                canvasCtx.strokeStyle = t.color;
+                canvasCtx.lineWidth = 4;
+                canvasCtx.beginPath();
+                canvasCtx.arc(t.x, t.y, t.radius, 0, 2 * Math.PI);
+                canvasCtx.stroke();
+                
+                canvasCtx.fillStyle = t.color === '#00E5FF' ? 'rgba(0, 229, 255, 0.25)' :
+                                      t.color === '#FF3366' ? 'rgba(255, 51, 102, 0.25)' : 
+                                                              'rgba(0, 255, 102, 0.25)';
+                canvasCtx.fill();
+            });
         }
 
-        function checkInteraction(handLandmark, target, side) {
-            if (!handLandmark || handLandmark.visibility < 0.5) return;
+        function checkInteraction(bodyPart, target) {
+            if (!bodyPart || bodyPart.visibility < 0.5) return;
 
             const w = canvasElement.width;
             const h = canvasElement.height;
-            const hX = handLandmark.x * w;
-            const hY = handLandmark.y * h;
+            const pX = bodyPart.x * w;
+            const pY = bodyPart.y * h;
 
-            const dist = Math.hypot(hX - target.x, hY - target.y);
+            const dist = Math.hypot(pX - target.x, pY - target.y);
 
             if (dist < target.radius + 20) {
-                // Genera particelle di esplosione
                 createParticles(target.x, target.y, target.color);
-
-                if (side === 'left') {
-                    scoreL++;
-                    scoreLeftEl.innerText = scoreL;
-                    target.x = Math.random() * (w * 0.4) + 50;
-                    target.y = Math.random() * (h * 0.6) + 100;
-                } else {
-                    scoreR++;
-                    scoreRightEl.innerText = scoreR;
-                    target.x = Math.random() * (w * 0.4) + (w * 0.5);
-                    target.y = Math.random() * (h * 0.6) + 100;
-                }
+                // Sposta il bersaglio colpito in una nuova posizione casuale
+                target.x = Math.random() * (w * 0.7) + (w * 0.15);
+                target.y = Math.random() * (h * 0.6) + 100;
             }
         }
 
         function createParticles(x, y, color) {
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 18; i++) {
                 particles.push({
-                    x: x,
-                    y: y,
-                    vx: (Math.random() - 0.5) * 8,
-                    vy: (Math.random() - 0.5) * 8,
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
                     alpha: 1,
                     color: color
                 });
@@ -314,7 +191,7 @@
             particles.forEach((p, index) => {
                 p.x += p.vx;
                 p.y += p.vy;
-                p.alpha -= 0.03;
+                p.alpha -= 0.035;
 
                 if (p.alpha <= 0) {
                     particles.splice(index, 1);
@@ -323,7 +200,7 @@
                     canvasCtx.globalAlpha = p.alpha;
                     canvasCtx.fillStyle = p.color;
                     canvasCtx.beginPath();
-                    canvasCtx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
+                    canvasCtx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
                     canvasCtx.fill();
                     canvasCtx.restore();
                 }
@@ -353,7 +230,6 @@
         });
         camera.start();
 
-        // Avvio iniziale con dimensioni corrette
         setTimeout(resizeCanvas, 500);
     </script>
 </body>
