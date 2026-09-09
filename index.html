@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Hand Tracking FX & Photo Booth</title>
+    <title>Retrolens 3D Hand Mesh FX - TikTok Trend</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -20,181 +20,187 @@
             height: 100vh;
         }
 
+        .hud-top {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(10, 10, 10, 0.85);
+            border: 1px solid rgba(0, 255, 204, 0.4);
+            padding: 12px 18px;
+            border-radius: 6px;
+            z-index: 20;
+            pointer-events: auto;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+        }
+
+        h4 { margin: 0 0 8px 0; font-size: 13px; color: #ff007f; letter-spacing: 1px; }
+        .filter-btn {
+            background: rgba(0, 255, 204, 0.1);
+            border: 1px solid #00ffcc;
+            color: #00ffcc;
+            padding: 5px 10px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 3px;
+            margin-right: 4px;
+            margin-bottom: 4px;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            background: #00ffcc;
+            color: #000;
+            font-weight: bold;
+        }
+
         .input_video {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             object-fit: cover;
             transform: scaleX(-1);
             z-index: 1;
+            display: none; /* nascosto per usare il canvas come render engine */
         }
 
         #output_canvas {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             transform: scaleX(-1);
             z-index: 2;
-        }
-
-        #ui-layer {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid #00ffcc;
-            padding: 15px;
-            border-radius: 8px;
-            pointer-events: auto;
-        }
-
-        h3 { margin: 0 0 10px 0; font-size: 14px; color: #ff007f; letter-spacing: 1px; }
-        button {
-            background: #00ffcc;
-            border: none;
-            color: #000;
-            padding: 8px 12px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            margin-right: 5px;
-            margin-bottom: 5px;
-        }
-        button:hover { background: #ff007f; color: #fff; }
-
-        #flash {
-            position: absolute;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: white;
-            opacity: 0;
-            z-index: 100;
-            pointer-events: none;
-            transition: opacity 0.2s ease-out;
         }
     </style>
 </head>
 <body>
 
-    <div id="flash"></div>
-
-    <div id="ui-layer">
-        <h3>FILTRI TIKTOK FX</h3>
-        <div id="filter-name" style="margin-bottom: 10px; font-size: 12px;">Filtro Attivo: <span style="color: #fff;">Cyber Neon</span></div>
-        <button onclick="changeFilter(0)">Cyber Neon</button>
-        <button onclick="changeFilter(1)">Matrix Green</button>
-        <button onclick="changeFilter(2)">Retro Vaporwave</button>
-        <br>
-        <button onclick="takeSnapshot()" style="background: #ff007f; color: #fff; width: 100%; margin-top: 5px;">📸 FOTOGRAFA</button>
+    <div class="hud-top">
+        <h4>RETROLENS 3D MESH FX</h4>
+        <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">FILTRO: <span style="color: #00ffcc;">RAINBOW-WAVE</span></div>
+        <div>
+            <button class="filter-btn active" onclick="setFilter('rainbow')">Rainbow Wave</button>
+            <button class="filter-btn" onclick="setFilter('matrix')">Matrix Glitch</button>
+            <button class="filter-btn" onclick="setFilter('thermal')">Thermal Cyber</button>
+            <button class="filter-btn" onclick="setFilter('invert')">Invert Vision</button>
+        </div>
     </div>
 
     <video class="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
 
+    <!-- Offscreen canvas per processare i filtri shader-like -->
+    <canvas id="buffer_canvas" style="display:none;"></canvas>
+
     <script>
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const flashElement = document.getElementById('flash');
-        const filterNameDisplay = document.getElementById('filter-name');
+        
+        const bufferCanvas = document.getElementById('buffer_canvas');
+        const bufferCtx = bufferCanvas.getContext('2d');
 
-        let currentFilter = 0;
-        const filters = ['Cyber Neon', 'Matrix Green', 'Retro Vaporwave'];
+        let currentFilter = 'rainbow';
 
-        function changeFilter(index) {
-            currentFilter = index;
-            filterNameDisplay.innerHTML = `Filtro Attivo: <span style="color: #fff;">${filters[currentFilter]}</span>`;
+        function setFilter(filterName) {
+            currentFilter = filterName;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('status-text').innerHTML = `FILTRO: <span style="color: #00ffcc;">${filterName.toUpperCase()}</span>`;
         }
 
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
+            bufferCanvas.width = window.innerWidth;
+            bufferCanvas.height = window.innerHeight;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-
-        function takeSnapshot() {
-            flashElement.style.opacity = '1';
-            setTimeout(() => { flashElement.style.opacity = '0'; }, 200);
-
-            // Crea un’immagine temporanea dello schermo corrente e la scarica
-            const link = document.createElement('a');
-            link.download = 'tiktok-effect-snapshot.png';
-            link.href = canvasElement.toDataURL('image/png');
-            link.click();
-        }
 
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Disegna il video con il filtro colore scelto
-            canvasCtx.filter = getCSSFilter();
+            // Disegna lo sfondo video normale ma leggermente scuro/desaturato per dare risalto all'effetto mesh
+            canvasCtx.filter = 'brightness(0.7) contrast(1.2)';
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.filter = 'none'; // reset filtri per gli elementi grafici
+            canvasCtx.filter = 'none';
 
-            // Se ci sono mani rilevate, disegna il rettangolo TikTok tra le mani
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            // Controlla se ci sono entrambe le mani per creare il poligono/mesh teso tra di esse
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
+                const h1 = results.multiHandLandmarks[0];
+                const h2 = results.multiHandLandmarks[1];
+
+                // Punti chiave: indice (8) e polso (0) di entrambe le mani
+                const p1_index = { x: (1 - h1[8].x) * canvasElement.width, y: h1[8].y * canvasElement.height };
+                const p1_wrist = { x: (1 - h1[0].x) * canvasElement.width, y: h1[0].y * canvasElement.height };
                 
-                // Se ci sono due mani, creiamo un riquadro che le collega o racchiude
-                if (results.multiHandLandmarks.length >= 2) {
-                    const h1 = results.multiHandLandmarks[0][0]; // polso mano 1
-                    const h2 = results.multiHandLandmarks[1][0]; // polso mano 2
+                const p2_index = { x: (1 - h2[8].x) * canvasElement.width, y: h2[8].y * canvasElement.height };
+                const p2_wrist = { x: (1 - h2[0].x) * canvasElement.width, y: h2[0].y * canvasElement.height };
 
-                    const x1 = (1 - h1.x) * canvasElement.width;
-                    const y1 = h1.y * canvasElement.height;
-                    const x2 = (1 - h2.x) * canvasElement.width;
-                    const y2 = h2.y * canvasElement.height;
+                // 1. Disegna il riquadro/mesh 3D teso tra le mani
+                canvasCtx.save();
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(p1_index.x, p1_index.y);
+                canvasCtx.lineTo(p2_index.x, p2_index.y);
+                canvasCtx.lineTo(p2_wrist.x, p2_wrist.y);
+                canvasCtx.lineTo(p1_wrist.x, p1_wrist.y);
+                canvasCtx.closePath();
 
-                    const minX = Math.min(x1, x2) - 80;
-                    const minY = Math.min(y1, y2) - 100;
-                    const boxWidth = Math.abs(x1 - x2) + 160;
-                    const boxHeight = Math.abs(y1 - y2) + 200;
+                // Crea la maschera di ritaglio (clip) così il filtro vive ESATTAMENTE dentro la mesh tra le mani
+                canvasCtx.clip();
 
-                    // Disegna il rettangolo in stile TikTok trend
-                    canvasCtx.strokeStyle = currentFilter === 0 ? '#00ffcc' : (currentFilter === 1 ? '#00ff00' : '#ff00ff');
-                    canvasCtx.lineWidth = 4;
-                    canvasCtx.shadowBlur = 15;
-                    canvasCtx.shadowColor = canvasCtx.strokeStyle;
-                    canvasCtx.strokeRect(minX, minY, boxWidth, boxHeight);
+                // 2. Disegna il video filtrato all'interno della mesh
+                bufferCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+                bufferCtx.drawImage(results.image, 0, 0, bufferCanvas.width, bufferCanvas.height);
+                
+                // Applica l'effetto grafico scelto stile shader
+                applyShaderEffect(canvasCtx, results.image, p1_index, p2_index, p2_wrist, p1_wrist);
 
-                    // Angoli tecnologici del riquadro
-                    drawTechCorners(canvasCtx, minX, minY, boxWidth, boxHeight);
-                }
+                canvasCtx.restore();
 
-                // Disegna i punti sulle mani
-                results.multiHandLandmarks.forEach((landmarks) => {
-                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(255,255,255,0.3)', lineWidth: 1});
-                    drawLandmarks(canvasCtx, landmarks, {color: '#ff007f', lineWidth: 1, radius: 3});
+                // 3. Cornice wireframe luminosa intorno alla mesh (stile HUD TikTok)
+                canvasCtx.strokeStyle = '#00ffcc';
+                canvasCtx.lineWidth = 3;
+                canvasCtx.shadowBlur = 15;
+                canvasCtx.shadowColor = '#00ffcc';
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(p1_index.x, p1_index.y);
+                canvasCtx.lineTo(p2_index.x, p2_index.y);
+                canvasCtx.lineTo(p2_wrist.x, p2_wrist.y);
+                canvasCtx.lineTo(p1_wrist.x, p1_wrist.y);
+                canvasCtx.closePath();
+                canvasCtx.stroke();
+
+                // Disegna i punti di tracking sulle mani (come nei tutorial)
+                [h1, h2].forEach(hand => {
+                    drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.4)', lineWidth: 1});
+                    drawLandmarks(canvasCtx, hand, {color: '#ff007f', lineWidth: 1, radius: 2});
                 });
+            } else {
+                // Se c'è una sola mano o nessuna, mostra un suggerimento visivo
+                canvasCtx.fillStyle = 'rgba(0, 255, 204, 0.7)';
+                canvasCtx.font = '16px Courier New';
+                canvasCtx.textAlign = 'center';
+                canvasCtx.fillText("MOSTRA ENTRAMBE LE MANI PER ATTIVARE LA MESH 3D", canvasElement.width / 2, canvasElement.height - 60);
             }
 
             canvasCtx.restore();
         }
 
-        function getCSSFilter() {
-            if (currentFilter === 0) return 'hue-rotate(90deg) saturate(180%) contrast(120%)';
-            if (currentFilter === 1) return 'hue-rotate(120deg) brightness(90%) contrast(150%)';
-            if (currentFilter === 2) return 'hue-rotate(290deg) saturate(200%) brightness(110%)';
-            return 'none';
-        }
-
-        function drawTechCorners(ctx, x, y, w, h) {
-            const len = 20;
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            // Top-left
-            ctx.beginPath(); ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y); ctx.stroke();
-            // Top-right
-            ctx.beginPath(); ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len); ctx.stroke();
-            // Bottom-left
-            ctx.beginPath(); ctx.moveTo(x, y + h - len); ctx.lineTo(x, y + h); ctx.lineTo(x + len, y + h); ctx.stroke();
-            // Bottom-right
-            ctx.beginPath(); ctx.moveTo(x + w - len, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - len); ctx.stroke();
+        // Funzione che simula i filtri shader all'interno del poligono tra le mani
+        function applyShaderEffect(ctx, img, p1, p2, p3, p4) {
+            ctx.save();
+            if (currentFilter === 'rainbow') {
+                ctx.filter = 'hue-rotate(' + (Date.now() / 10 % 360) + 'deg) saturate(300%) contrast(150%)';
+            } else if (currentFilter === 'matrix') {
+                ctx.filter = 'hue-rotate(90deg) brightness(80%) contrast(200%)';
+            } else if (currentFilter === 'thermal') {
+                ctx.filter = 'invert(100%) hue-rotate(180deg) saturate(400%)';
+            } else if (currentFilter === 'invert') {
+                ctx.filter = 'invert(90%) contrast(150%)';
+            }
+            ctx.drawImage(img, 0, 0, canvasElement.width, canvasElement.height);
+            ctx.restore();
         }
 
         const hands = new Hands({
