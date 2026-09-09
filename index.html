@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Air Canvas - Disegna con le Dita</title>
+    <title>Air Canvas - Fluido e Preciso</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -32,25 +32,21 @@
             z-index: 1;
         }
 
-        /* Canvas per i disegni salvati */
         #paint_canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1);
             z-index: 2;
         }
 
-        /* Canvas per la webcam / UI interattiva */
         #output_canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1);
             z-index: 3;
             pointer-events: none;
         }
@@ -63,7 +59,7 @@
             font-size: 14px;
             letter-spacing: 2px;
             color: #00ffcc;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             padding: 8px 16px;
             border: 1px solid #00ffcc;
             border-radius: 4px;
@@ -74,12 +70,10 @@
 </head>
 <body>
 
-    <div id="instruction">USA L'INDICE PER MUOVERTI • PIZZICO PER DISEGNARE • TOCCA I COLORI A SINISTRA</div>
+    <div id="instruction">INDICE PER MUOVERTI • PIZZICO PER DISEGNO FLUIDO • TOCCA I COLORI A SINISTRA</div>
 
     <video class="input_video" autoplay playsinline muted></video>
-    <!-- Canvas sottostante dove rimane impresso il disegno -->
     <canvas id="paint_canvas"></canvas>
-    <!-- Canvas superiore per la mano e la palette colori -->
     <canvas id="output_canvas"></canvas>
 
     <script>
@@ -98,21 +92,24 @@
         window.addEventListener('resize', resizeCanvases);
         resizeCanvases();
 
-        // Lista dei colori e della gomma (ordinate in verticale a sinistra)
         const palette = [
-            { name: "Rosso", color: "#ff3333", x: 30, y: 50, size: 40 },
-            { name: "Arancione", color: "#ff9900", x: 30, y: 110, size: 40 },
-            { name: "Giallo", color: "#ffff33", x: 30, y: 170, size: 40 },
-            { name: "Verde", color: "#33cc33", x: 30, y: 230, size: 40 },
-            { name: "Blu", color: "#3333ff", x: 30, y: 290, size: 40 },
-            { name: "Viola", color: "#9933ff", x: 30, y: 350, size: 40 },
-            { name: "Bianco", color: "#ffffff", x: 30, y: 410, size: 40 },
-            { name: "Gomma", color: "#000000", x: 30, y: 470, size: 40, isEraser: true }
+            { name: "Rosso", color: "#ff3333", x: 40, y: 50, size: 40 },
+            { name: "Arancione", color: "#ff9900", x: 40, y: 110, size: 40 },
+            { name: "Giallo", color: "#ffff33", x: 40, y: 170, size: 40 },
+            { name: "Verde", color: "#33cc33", x: 40, y: 230, size: 40 },
+            { name: "Blu", color: "#3333ff", x: 40, y: 290, size: 40 },
+            { name: "Viola", color: "#9933ff", x: 40, y: 350, size: 40 },
+            { name: "Bianco", color: "#ffffff", x: 40, y: 410, size: 40 },
+            { name: "Gomma", color: "#000000", x: 40, y: 470, size: 40, isEraser: true }
         ];
 
         let currentColor = "#ff3333";
         let isEraserActive = false;
         let brushSize = 8;
+        
+        // Variabili per la fluidità (Smoothing / Lerp)
+        let smoothX = null;
+        let smoothY = null;
         let lastX = null;
         let lastY = null;
         let isDrawing = false;
@@ -121,7 +118,7 @@
             outputCtx.save();
             outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
 
-            // Disegna la palette dei colori sulla sinistra
+            // Disegna la palette a sinistra
             palette.forEach(item => {
                 outputCtx.beginPath();
                 outputCtx.arc(item.x, item.y, item.size / 2, 0, Math.PI * 2);
@@ -132,42 +129,47 @@
                 outputCtx.stroke();
                 outputCtx.closePath();
 
-                // Etichetta testuale del colore
                 outputCtx.fillStyle = "#ffffff";
                 outputCtx.font = "11px Courier New";
-                outputCtx.fillText(item.name, item.x + 30, item.y + 4);
+                outputCtx.fillText(item.name, item.x + 35, item.y + 4);
             });
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
 
-                // Coordinate dell'indice (punto 8) e del pollice (punto 4)
-                // Nota: poiché il canvas è specchiato via CSS, gestiamo le coordinate di conseguenza
-                const indexX = (1 - landmarks[8].x) * window.innerWidth;
-                const indexY = landmarks[8].y * window.innerHeight;
-                const thumbX = (1 - landmarks[4].x) * window.innerWidth;
+                // CORREZIONE ASSE X: rimosso l'inversione speculare per allinearlo perfettamente al canvas non specchiato
+                const rawX = landmarks[8].x * window.innerWidth;
+                const rawY = landmarks[8].y * window.innerHeight;
+                const thumbX = landmarks[4].x * window.innerWidth;
                 const thumbY = landmarks[4].y * window.innerHeight;
 
-                // Calcola la distanza tra pollice e indice per il "pizzico"
-                const pinchDist = Math.hypot(indexX - thumbX, indexY - thumbY);
-                const isPinched = pinchDist < 40; // Soglia per considerare il pizzico attivo
+                // Smoothing (Lerp) per evitare scatti e rendere il cursore fluidissimo
+                if (smoothX === null || smoothY === null) {
+                    smoothX = rawX;
+                    smoothY = rawY;
+                } else {
+                    smoothX += (rawX - smoothX) * 0.35; // Regola la reattività (0.1 = morbido, 0.9 = reattivo)
+                    smoothY += (rawY - smoothY) * 0.35;
+                }
+
+                const pinchDist = Math.hypot(smoothX - thumbX, smoothY - thumbY);
+                const isPinched = pinchDist < 45; // Soglia comoda per il pizzico
 
                 // Disegna il cursore sulla punta dell'indice
                 outputCtx.beginPath();
-                outputCtx.arc(indexX, indexY, 8, 0, Math.PI * 2);
+                outputCtx.arc(smoothX, smoothY, 8, 0, Math.PI * 2);
                 outputCtx.fillStyle = isPinched ? "#00ffcc" : currentColor;
                 outputCtx.fill();
                 outputCtx.lineWidth = 2;
                 outputCtx.strokeStyle = "#ffffff";
                 outputCtx.stroke();
 
-                // Controllo se l'utente sta selezionando un colore dalla palette
+                // Controllo selezione colori
                 let selectingColor = false;
                 palette.forEach(item => {
-                    const distToPalette = Math.hypot(indexX - item.x, indexY - item.y);
+                    const distToPalette = Math.hypot(smoothX - item.x, smoothY - item.y);
                     if (distToPalette < item.size / 2) {
                         selectingColor = true;
-                        // Se fa il pizzico sul colore, lo seleziona
                         if (isPinched) {
                             if (item.isEraser) {
                                 isEraserActive = true;
@@ -179,27 +181,25 @@
                     }
                 });
 
-                // Se non sta selezionando i colori ed è in modalità pizzico, disegna!
+                // Gestione del tratto di disegno continuo e senza buchi
                 if (isPinched && !selectingColor) {
                     if (!isDrawing) {
-                        // Inizia un nuovo tratto
                         isDrawing = true;
-                        lastX = indexX;
-                        lastY = indexY;
+                        lastX = smoothX;
+                        lastY = smoothY;
                     } else {
-                        // Disegna la linea sul canvas persistente
                         paintCtx.beginPath();
                         paintCtx.moveTo(lastX, lastY);
-                        paintCtx.lineTo(indexX, indexY);
+                        paintCtx.lineTo(smoothX, smoothY);
                         
                         if (isEraserActive) {
                             paintCtx.strokeStyle = "#000000";
-                            paintCtx.lineWidth = 35; // Gomma più larga
-                            paintCtx.globalCompositeOperation = "destination-out"; // Cancella realmente
+                            paintCtx.lineWidth = 40;
+                            paintCtx.globalCompositeOperation = "destination-out"; // Cancella
                         } else {
                             paintCtx.strokeStyle = currentColor;
                             paintCtx.lineWidth = brushSize;
-                            paintCtx.globalCompositeOperation = "source-over";
+                            paintCtx.globalCompositeOperation = "source-over"; // Disegna
                         }
                         
                         paintCtx.lineCap = "round";
@@ -207,8 +207,8 @@
                         paintCtx.stroke();
                         paintCtx.closePath();
 
-                        lastX = indexX;
-                        lastY = indexY;
+                        lastX = smoothX;
+                        lastY = smoothY;
                     }
                 } else {
                     isDrawing = false;
@@ -218,6 +218,8 @@
 
             } else {
                 isDrawing = false;
+                smoothX = null;
+                smoothY = null;
             }
 
             outputCtx.restore();
@@ -230,8 +232,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+            minDetectionConfidence: 0.75,
+            minTrackingConfidence: 0.75
         });
 
         hands.onResults(onResults);
