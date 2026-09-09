@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retrolens Pro - Chest Mount Edition</title>
+    <title>Retrolens Pro - Dual Effects Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -101,7 +101,7 @@
         #settings-panel {
             position: absolute;
             top: 0; right: -100%;
-            width: 100%; max-width: 360px;
+            width: 100%; max-width: 380px;
             height: 100%;
             background: rgba(10, 10, 10, 0.96);
             border-left: 1px solid rgba(0, 255, 204, 0.3);
@@ -123,13 +123,14 @@
         }
         .settings-header h3 { margin: 0; color: #ff007f; font-size: 15px; letter-spacing: 2px; }
 
-        .control-group { margin-bottom: 16px; }
+        .control-group { margin-bottom: 18px; }
         .control-group label {
             display: block;
             font-size: 10px;
             color: #aaa;
             margin-bottom: 6px;
             letter-spacing: 1px;
+            font-weight: bold;
         }
 
         .option-btn {
@@ -221,7 +222,7 @@
 
         <div id="settings-panel">
             <div class="settings-header">
-                <h3>IMPOSTAZIONI</h3>
+                <h3>EFFETTI SEPARATI</h3>
                 <button class="hud-btn" onclick="toggleSettings()">✕</button>
             </div>
 
@@ -238,16 +239,28 @@
             </div>
 
             <div class="control-group">
-                <label>COLORE ELEMENTI:</label>
+                <label>COLORE BORDO PORTALE:</label>
                 <input type="color" id="theme-color" value="#00ffcc" onchange="accentColor = this.value">
             </div>
 
+            <!-- FILTRI DENTRO -->
             <div class="control-group">
-                <label>FILTRI EFFETTO:</label>
-                <button class="option-btn active" onclick="setMode('portal', this)">Finestra Colore</button>
-                <button class="option-btn" onclick="setMode('inverted', this)">Inverso</button>
-                <button class="option-btn" onclick="setMode('neon', this)">Neon</button>
-                <button class="option-btn" onclick="setMode('none', this)">Nessuno</button>
+                <label>✨ DENTRO IL PORTALE (MANI):</label>
+                <button class="option-btn active" onclick="setInsideEffect('color', this)">Colore Vivo</button>
+                <button class="option-btn" onclick="setInsideEffect('bw', this)">Bianco e Nero</button>
+                <button class="option-btn" onclick="setInsideEffect('blur', this)">Sfocato (Blur)</button>
+                <button class="option-btn" onclick="setInsideEffect('pixel', this)">Pixelato</button>
+                <button class="option-btn" onclick="setInsideEffect('inverse', this)">Inverso</button>
+            </div>
+
+            <!-- FILTRI FUORI -->
+            <div class="control-group">
+                <label>🌌 FUORI DAL PORTALE (SFONDO):</label>
+                <button class="option-btn" onclick="setOutsideEffect('color', this)">Colore Vivo</button>
+                <button class="option-btn active" onclick="setOutsideEffect('bw', this)">Bianco e Nero</button>
+                <button class="option-btn" onclick="setOutsideEffect('blur', this)">Sfocato (Blur)</button>
+                <button class="option-btn" onclick="setOutsideEffect('pixel', this)">Pixelato</button>
+                <button class="option-btn" onclick="setOutsideEffect('inverse', this)">Inverso</button>
             </div>
         </div>
     </div>
@@ -265,9 +278,10 @@
         const flashEl = document.getElementById('flash-overlay');
         const settingsPanel = document.getElementById('settings-panel');
 
-        let currentMode = 'portal';
-        let currentFacingMode = 'environment'; // Di default partiamo con la posteriore per il petto
-        let isMirrored = false; // Spenta di default per la posteriore
+        let insideEffect = 'color';
+        let outsideEffect = 'bw';
+        let currentFacingMode = 'environment';
+        let isMirrored = false;
         let accentColor = '#00ffcc';
         let isCountingDown = false;
         let cameraInstance = null;
@@ -277,10 +291,18 @@
             settingsPanel.classList.toggle('open');
         }
 
-        function setMode(mode, btn) {
-            currentMode = mode;
-            document.querySelectorAll('#settings-panel .control-group:last-child .option-btn').forEach(b => b.classList.remove('active'));
-            if(btn) btn.classList.add('active');
+        function setInsideEffect(eff, btn) {
+            insideEffect = eff;
+            const group = btn.parentElement;
+            group.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function setOutsideEffect(eff, btn) {
+            outsideEffect = eff;
+            const group = btn.parentElement;
+            group.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
         }
 
         function setCamera(facing, btn) {
@@ -288,7 +310,6 @@
             document.querySelectorAll('#settings-panel .control-group:nth-child(1) .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
             
-            // Se metti la frontale, attivi lo specchio in automatico; se metti la retro, lo spegni
             if (facing === 'user') {
                 setMirror(true, document.querySelector('[onclick="setMirror(true, this)"]'));
             } else {
@@ -312,6 +333,51 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
+        function applyFilterStyle(ctx, effectType, w, h) {
+            if (effectType === 'color') {
+                ctx.filter = 'saturate(180%) contrast(110%)';
+            } else if (effectType === 'bw') {
+                ctx.filter = 'grayscale(100%) contrast(140%) brightness(90%)';
+            } else if (effectType === 'blur') {
+                ctx.filter = 'blur(12px) saturate(130%)';
+            } else if (effectType === 'pixel') {
+                ctx.filter = 'none'; // Gestito separatamente o simulato
+            } else if (effectType === 'inverse') {
+                ctx.filter = 'invert(100%) saturate(200%)';
+            } else {
+                ctx.filter = 'none';
+            }
+        }
+
+        function drawEffectLayer(ctx, image, effectType, w, h, clipPathFn = null) {
+            ctx.save();
+            if (clipPathFn) {
+                clipPathFn(ctx);
+                ctx.clip();
+            }
+
+            if (effectType === 'pixel') {
+                // Pixel art effect realistico via canvas a bassa risoluzione
+                const pScale = 0.05; // Fattore di pixelatura
+                const pw = Math.floor(w * pScale);
+                const ph = Math.floor(h * pScale);
+                
+                const offScreen = document.createElement('canvas');
+                offScreen.width = pw;
+                offScreen.height = ph;
+                const offCtx = offScreen.getContext('2d');
+                offCtx.drawImage(image, 0, 0, pw, ph);
+                
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(offScreen, 0, 0, pw, ph, 0, 0, w, h);
+                ctx.imageSmoothingEnabled = true;
+            } else {
+                applyFilterStyle(ctx, effectType, w, h);
+                ctx.drawImage(image, 0, 0, w, h);
+            }
+            ctx.restore();
+        }
+
         function triggerCapture() {
             if (isCountingDown) return;
             isCountingDown = true;
@@ -334,12 +400,11 @@
                     setTimeout(() => { flashEl.style.opacity = '0'; }, 300);
 
                     statusText.innerText = "FOTO SCATTATA!";
-                    
                     lastCapturedUrl = canvasElement.toDataURL('image/png', 1.0);
                     
                     const link = document.createElement('a');
                     link.href = lastCapturedUrl;
-                    link.download = `retrolens-chest-${Date.now()}.png`;
+                    link.download = `retrolens-dual-${Date.now()}.png`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -354,7 +419,7 @@
             if (!lastCapturedUrl) return;
             const link = document.createElement('a');
             link.href = lastCapturedUrl;
-            link.download = `retrolens-chest-${Date.now()}.png`;
+            link.download = `retrolens-dual-${Date.now()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -372,11 +437,6 @@
             const w = canvasElement.width;
             const h = canvasElement.height;
 
-            // Sfondo in bianco e nero
-            canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(85%)';
-            canvasCtx.drawImage(results.image, 0, 0, w, h);
-            canvasCtx.filter = 'none';
-
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
                 let leftHand = null;
                 let rightHand = null;
@@ -384,7 +444,6 @@
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const lm = results.multiHandLandmarks[i];
                     const avgX = lm.reduce((acc, pt) => acc + pt.x, 0) / lm.length;
-                    // In modalità posteriore invertiamo la logica sinistra/destra per coerenza visiva
                     if (currentFacingMode === 'environment') {
                         if (avgX > 0.5) { leftHand = lm; } else { rightHand = lm; }
                     } else {
@@ -414,38 +473,31 @@
                 const r_index = { x: rightHand[8].x * w, y: rightHand[8].y * h };
                 const r_thumb = { x: rightHand[4].x * w, y: rightHand[4].y * h };
 
-                canvasCtx.save();
-                canvasCtx.beginPath();
-                canvasCtx.moveTo(l_index.x, l_index.y);
-                canvasCtx.lineTo(r_index.x, r_index.y);
-                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
-                canvasCtx.lineTo(l_thumb.x, l_thumb.y);
-                canvasCtx.closePath();
-                canvasCtx.clip();
+                const portalClipFn = (ctx) => {
+                    ctx.beginPath();
+                    ctx.moveTo(l_index.x, l_index.y);
+                    ctx.lineTo(r_index.x, r_index.y);
+                    ctx.lineTo(r_thumb.x, r_thumb.y);
+                    ctx.lineTo(l_thumb.x, l_thumb.y);
+                    ctx.closePath();
+                };
 
-                if (currentMode === 'portal') {
-                    canvasCtx.filter = 'saturate(200%) contrast(120%)';
-                } else if (currentMode === 'inverted') {
-                    canvasCtx.filter = 'invert(100%) saturate(200%)';
-                } else if (currentMode === 'neon') {
-                    canvasCtx.filter = 'hue-rotate(120deg) saturate(300%) contrast(150%)';
-                } else {
-                    canvasCtx.filter = 'none';
-                }
-                
-                canvasCtx.drawImage(results.image, 0, 0, w, h);
-                canvasCtx.restore();
+                // 1. Disegna prima lo SFONDO (Fuori dal portale) con il suo filtro
+                drawEffectLayer(canvasCtx, results.image, outsideEffect, w, h, (ctx) => {
+                    ctx.rect(0, 0, w, h);
+                    portalClipFn(ctx);
+                    ctx.clip('evenodd'); // Esclude la zona interna del portale
+                });
 
+                // 2. Disegna l'INTERNO del portale con il suo filtro dedicato
+                drawEffectLayer(canvasCtx, results.image, insideEffect, w, h, portalClipFn);
+
+                // 3. Cornice luminosa geometrica ed elementi visivi
                 canvasCtx.strokeStyle = accentColor;
                 canvasCtx.lineWidth = 4;
                 canvasCtx.shadowBlur = 15;
                 canvasCtx.shadowColor = accentColor;
-                canvasCtx.beginPath();
-                canvasCtx.moveTo(l_index.x, l_index.y);
-                canvasCtx.lineTo(r_index.x, r_index.y);
-                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
-                canvasCtx.lineTo(l_thumb.x, l_thumb.y);
-                canvasCtx.closePath();
+                portalClipFn(canvasCtx);
                 canvasCtx.stroke();
                 canvasCtx.shadowBlur = 0;
 
@@ -462,6 +514,8 @@
                 });
 
             } else {
+                // Se non rileva le mani, applica comunque il filtro esterno a tutto lo schermo
+                drawEffectLayer(canvasCtx, results.image, outsideEffect, w, h);
                 if (!isCountingDown) {
                     statusText.innerText = "MOSTRA 🐺 ENTRAMBE LE MANI ALLA CAMERA";
                 }
@@ -477,7 +531,7 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5, // Leggermente abbassata per aiutare la telecamera posteriore vicina al corpo
+            minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
 
@@ -505,7 +559,7 @@
                 errorOverlay.style.display = 'none';
             } catch (err) {
                 console.error("Errore fotocamera:", err);
-                errorMsg.innerText = "Impossibile accedere alla fotocamera posteriore. Controlla i permessi o se un'altra app la sta bloccando.\n\nDettaglio: " + err.message;
+                errorMsg.innerText = "Impossibile accedere alla fotocamera. Controlla i permessi o se un'altra app la sta bloccando.\n\nDettaglio: " + err.message;
                 retryBtn.style.display = 'inline-block';
                 errorOverlay.style.display = 'flex';
             }
