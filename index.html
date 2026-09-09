@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retrolens Precise Finger Mesh - TikTok Trend</title>
+    <title>Retrolens Natural Finger Mesh</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -29,7 +29,6 @@
             padding: 12px 18px;
             border-radius: 6px;
             z-index: 20;
-            pointer-events: auto;
             box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
         }
 
@@ -44,7 +43,6 @@
             cursor: pointer;
             border-radius: 3px;
             margin-right: 4px;
-            margin-bottom: 4px;
         }
         .filter-btn:hover, .filter-btn.active {
             background: #00ffcc;
@@ -58,7 +56,7 @@
             position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            transform: scaleX(-1);
+            /* NESSUNA INVERSIONE: La tua mano sinistra a sinistra rimane a sinistra! */
             z-index: 2;
         }
     </style>
@@ -66,7 +64,7 @@
 <body>
 
     <div class="hud-top">
-        <h4>PRECISE FINGER MESH FX</h4>
+        <h4>NATURAL FINGER MESH FX</h4>
         <div id="status-text" style="font-size: 11px; margin-bottom: 8px; color: #fff;">MODALITÀ: <span style="color: #00ffcc;">FINESTRA A COLORI</span></div>
         <div>
             <button class="filter-btn active" onclick="setMode('portal')">Finestra Colore</button>
@@ -109,50 +107,50 @@
                 return;
             }
 
-            // 1. Sfondo generale in bianco e nero ad alto contrasto
+            // 1. Sfondo in bianco e nero
             canvasCtx.filter = 'grayscale(100%) contrast(140%) brightness(80%)';
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.filter = 'none';
 
-            // 2. Se ci sono entrambe le mani, distinguiamo correttamente la destra e la sinistra
+            // 2. Controllo delle mani con orientamento naturale (senza specchio)
             if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2 && results.multiHandedness) {
                 let leftHand = null;
                 let rightHand = null;
 
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-                    const label = results.multiHandedness[i].label; // 'Left' o 'Right' dal punto di vista della telecamera
-                    // Poiché il video è specchiato, invertiamo l'etichetta per corrispondere alla realtà fisica dell'utente
-                    if (label === 'Right') {
-                        leftHand = results.multiHandLandmarks[i]; // Quella che appare a destra nello specchio è la sinistra dell'utente
+                    const label = results.multiHandedness[i].label; // 'Left' o 'Right' nativo di MediaPipe
+                    // Usiamo la coordinata X media della mano per capire se sta fisicamente a sinistra o a destra sullo schermo
+                    const landmarks = results.multiHandLandmarks[i];
+                    const avgX = landmarks.reduce((acc, pt) => acc + pt.x, 0) / landmarks.length;
+
+                    if (avgX < 0.5) {
+                        leftHand = landmarks; // Mano a sinistra dello schermo
                     } else {
-                        rightHand = results.multiHandLandmarks[i]; // Quella che appare a sinistra è la destra dell'utente
+                        rightHand = landmarks; // Mano a destra dello schermo
                     }
                 }
 
-                // Fallback nel caso in cui MediaPipe etichetti in modo anomalo
+                // Fallback di sicurezza se le mani sono vicine
                 if (!leftHand || !rightHand) {
                     leftHand = results.multiHandLandmarks[0];
                     rightHand = results.multiHandLandmarks[1];
                 }
 
-                // Punte dita Mano Sinistra (Indice = 8, Pollice = 4)
-                const l_index = { x: (1 - leftHand[8].x) * canvasElement.width, y: leftHand[8].y * canvasElement.height };
-                const l_thumb = { x: (1 - leftHand[4].x) * canvasElement.width, y: leftHand[4].y * canvasElement.height };
-
-                // Punte dita Mano Destra (Indice = 8, Pollice = 4)
-                const r_index = { x: (1 - rightHand[8].x) * canvasElement.width, y: rightHand[8].y * canvasElement.height };
-                const r_thumb = { x: (1 - rightHand[4].x) * canvasElement.width, y: rightHand[4].y * canvasElement.height };
+                // Punte esatte: Indice (8) e Pollice (4)
+                const l_index = { x: leftHand[8].x * canvasElement.width, y: leftHand[8].y * canvasElement.height };
+                const l_thumb = { x: leftHand[4].x * canvasElement.width, y: leftHand[4].y * canvasElement.height };
+                const r_index = { x: rightHand[8].x * canvasElement.width, y: rightHand[8].y * canvasElement.height };
+                const r_thumb = { x: rightHand[4].x * canvasElement.width, y: rightHand[4].y * canvasElement.height };
 
                 canvasCtx.save();
                 canvasCtx.beginPath();
-                // Connessione corretta: Indice Sinistra -> Indice Destra -> Pollice Destra -> Pollice Sinistra -> Chiusura
+                // Perimetro geometrico tra le dita
                 canvasCtx.moveTo(l_index.x, l_index.y);
                 canvasCtx.lineTo(r_index.x, r_index.y);
                 canvasCtx.lineTo(r_thumb.x, r_thumb.y);
                 canvasCtx.lineTo(l_thumb.x, l_thumb.y);
                 canvasCtx.closePath();
 
-                // Ritaglio per isolare i colori reali solo dentro il poligono
                 canvasCtx.clip();
 
                 if (currentMode === 'portal') {
@@ -166,7 +164,7 @@
                 canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                 canvasCtx.restore();
 
-                // 3. Cornice wireframe luminosa tracciata sulle punte
+                // 3. Cornice wireframe ed evidenziazione dei collegamenti richiesti
                 canvasCtx.strokeStyle = '#00ffcc';
                 canvasCtx.lineWidth = 3;
                 canvasCtx.shadowBlur = 18;
@@ -179,22 +177,20 @@
                 canvasCtx.closePath();
                 canvasCtx.stroke();
 
-                // Linee evidenziate per i collegamenti specifici
+                // Linee di collegamento puntino a puntino
                 canvasCtx.strokeStyle = '#ff007f';
                 canvasCtx.lineWidth = 2;
                 // Indice <-> Indice
-                canvasCtx.beginPath();
-                canvasCtx.moveTo(l_index.x, l_index.y);
-                canvasCtx.lineTo(r_index.x, r_index.y);
-                canvasCtx.stroke();
+                canvasCtx.beginPath(); canvasCtx.moveTo(l_index.x, l_index.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
                 // Pollice <-> Pollice
-                canvasCtx.beginPath();
-                canvasCtx.moveTo(l_thumb.x, l_thumb.y);
-                canvasCtx.lineTo(r_thumb.x, r_thumb.y);
-                canvasCtx.stroke();
+                canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(r_thumb.x, r_thumb.y); canvasCtx.stroke();
+                // Pollice <-> Indice (mano sinistra)
+                canvasCtx.beginPath(); canvasCtx.moveTo(l_thumb.x, l_thumb.y); canvasCtx.lineTo(l_index.x, l_index.y); canvasCtx.stroke();
+                // Pollice <-> Indice (mano destra)
+                canvasCtx.beginPath(); canvasCtx.moveTo(r_thumb.x, r_thumb.y); canvasCtx.lineTo(r_index.x, r_index.y); canvasCtx.stroke();
 
-                // Disegna lo scheletro delle mani
-                results.multiHandLandmarks.forEach(hand => {
+                // Scheletro delle mani
+                [leftHand, rightHand].forEach(hand => {
                     drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.3)', lineWidth: 1});
                     drawLandmarks(canvasCtx, hand, {color: '#ff007f', lineWidth: 1, radius: 2});
                 });
@@ -205,7 +201,7 @@
                 canvasCtx.textAlign = 'center';
                 canvasCtx.shadowBlur = 10;
                 canvasCtx.shadowColor = '#00ffcc';
-                canvasCtx.fillText("avvicina indici e pollici di entrambe le mani", canvasElement.width / 2, canvasElement.height - 50);
+                canvasCtx.fillText("AVVICINA INDICI E POLLICI DI ENTRAMBE LE MANI", canvasElement.width / 2, canvasElement.height - 50);
             }
 
             canvasCtx.restore();
@@ -236,4 +232,3 @@
     </script>
 </body>
 </html>
-
