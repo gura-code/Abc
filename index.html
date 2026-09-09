@@ -12,7 +12,7 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #0e0e0e;
+            background-color: #050505;
             color: #00ffcc;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
@@ -23,22 +23,24 @@
             align-items: center;
         }
 
+        /* Container principale che simula il mirino nativo della fotocamera senza deformare */
         #viewfinder-container {
             position: relative;
             width: 100vw;
             height: 100vh;
             overflow: hidden;
+            background: #000;
             display: flex;
             justify-content: center;
             align-items: center;
-            background: #000;
+            transition: all 0.3s ease;
         }
 
         #output_canvas {
             position: absolute;
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: cover; /* Taglio pulito stile fotocamera nativa */
             transform: scaleX(-1);
             z-index: 2;
         }
@@ -47,40 +49,40 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(14, 14, 14, 0.9);
+            background: rgba(14, 14, 14, 0.92);
             border: 1px solid rgba(0, 255, 204, 0.4);
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
             z-index: 20;
             box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
-            max-width: 320px;
+            max-width: 300px;
             transform: scaleX(1);
         }
 
-        h4 { margin: 0 0 10px 0; font-size: 14px; color: #ff007f; letter-spacing: 1px; }
+        h4 { margin: 0 0 8px 0; font-size: 13px; color: #ff007f; letter-spacing: 1px; }
         
         .control-group {
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .control-group label {
             display: block;
-            font-size: 10px;
+            font-size: 9px;
             color: #aaa;
-            margin-bottom: 3px;
+            margin-bottom: 2px;
         }
 
         .filter-btn, .option-btn, #manual-download-btn {
             background: rgba(0, 255, 204, 0.1);
             border: 1px solid #00ffcc;
             color: #00ffcc;
-            padding: 4px 8px;
+            padding: 3px 6px;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 10px;
+            font-size: 9px;
             cursor: pointer;
             border-radius: 3px;
-            margin-right: 3px;
-            margin-bottom: 3px;
+            margin-right: 2px;
+            margin-bottom: 2px;
         }
         .filter-btn:hover, .filter-btn.active, .option-btn:hover, .option-btn.active {
             background: #00ffcc;
@@ -95,18 +97,16 @@
             border-color: #ff007f;
             color: #fff;
             font-weight: bold;
-            margin-top: 8px;
-            padding: 6px;
+            margin-top: 6px;
+            padding: 5px;
             text-align: center;
         }
-        #manual-download-btn:hover {
-            background: #ff3399;
-        }
+        #manual-download-btn:hover { background: #ff3399; }
 
         input[type="color"] {
             border: 1px solid #00ffcc;
-            width: 30px;
-            height: 22px;
+            width: 25px;
+            height: 18px;
             background: transparent;
             cursor: pointer;
             vertical-align: middle;
@@ -143,7 +143,7 @@
     <div id="viewfinder-container">
         <div class="hud-top">
             <h4>RETROLENS PRO FX</h4>
-            <div id="status-text" style="font-size: 10px; margin-bottom: 8px; color: #fff;">STATO: <span style="color: #00ffcc;">PRONTO</span></div>
+            <div id="status-text" style="font-size: 9px; margin-bottom: 6px; color: #fff;">STATO: <span style="color: #00ffcc;">PRONTO</span></div>
             
             <div class="control-group">
                 <label>FOTOCAMERA:</label>
@@ -152,10 +152,12 @@
             </div>
 
             <div class="control-group">
-                <label>FORMATO:</label>
+                <label>FRAME / FORMATO:</label>
                 <button class="option-btn active" onclick="setAspectRatio('full', this)">Schermo Intero</button>
+                <button class="option-btn" onclick="setAspectRatio('1:1', this)">Quadrato (1:1)</button>
                 <button class="option-btn" onclick="setAspectRatio('9:16', this)">Verticale (9:16)</button>
                 <button class="option-btn" onclick="setAspectRatio('16:9', this)">Orizzontale (16:9)</button>
+                <button class="option-btn" onclick="setAspectRatio('4:3', this)">Classico (4:3)</button>
             </div>
 
             <div class="control-group">
@@ -171,7 +173,6 @@
                 <button class="filter-btn" onclick="setMode('none', this)">Nessuno</button>
             </div>
 
-            <!-- Pulsante di download manuale d'emergenza se il browser blocca quello automatico -->
             <button id="manual-download-btn" onclick="downloadImageManually()">SCARICA FOTO 💾</button>
         </div>
 
@@ -217,15 +218,23 @@
             document.querySelectorAll('.control-group:nth-child(3) .option-btn').forEach(b => b.classList.remove('active'));
             if(btn) btn.classList.add('active');
             
+            // Gestione dei frame stile fotocamera nativa senza distorsioni
             if (aspect === 'full') {
                 container.style.width = '100vw';
                 container.style.height = '100vh';
+            } else if (aspect === '1:1') {
+                const size = Math.min(window.innerWidth, window.innerHeight) * 0.85;
+                container.style.width = size + 'px';
+                container.style.height = size + 'px';
             } else if (aspect === '9:16') {
-                container.style.width = 'calc(100vh * 9 / 16)';
-                container.style.height = '100vh';
+                container.style.height = '90vh';
+                container.style.width = (window.innerHeight * 0.9 * 9 / 16) + 'px';
             } else if (aspect === '16:9') {
-                container.style.width = '100vw';
-                container.style.height = 'calc(100vw * 9 / 16)';
+                container.style.width = '90vw';
+                container.style.height = (window.innerWidth * 0.9 * 9 / 16) + 'px';
+            } else if (aspect === '4:3') {
+                container.style.width = '85vw';
+                container.style.height = (window.innerWidth * 0.85 * 3 / 4) + 'px';
             }
             resizeCanvas();
         }
@@ -234,7 +243,7 @@
             canvasElement.width = container.clientWidth * window.devicePixelRatio;
             canvasElement.height = container.clientHeight * window.devicePixelRatio;
         }
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', () => setAspectRatio(currentAspect, null));
         resizeCanvas();
 
         function triggerCapture() {
@@ -260,11 +269,9 @@
 
                     document.getElementById('status-text').innerHTML = `STATO: <span style="color: ${accentColor};">FOTO SCATTATA!</span>`;
 
-                    // Genera l'immagine e forza il download
                     setTimeout(() => {
                         lastCapturedDataUrl = canvasElement.toDataURL('image/png', 1.0);
                         
-                        // Tentativo di download automatico forzato
                         const link = document.createElement('a');
                         link.href = lastCapturedDataUrl;
                         link.download = `retrolens-pro-${Date.now()}.png`;
@@ -272,7 +279,6 @@
                         link.click();
                         document.body.removeChild(link);
 
-                        // Mostra anche il pulsante manuale per sicurezza
                         downloadBtn.style.display = 'block';
                         isCountingDown = false;
                     }, 400);
