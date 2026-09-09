@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive HUD & Hand Tracking</title>
+    <title>Gojo Hand Tracking - Infinity & Beyond</title>
     <!-- Importazione librerie MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
@@ -13,8 +13,8 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #0E0E0E;
-            color: #00ffcc;
+            background-color: #05050a;
+            color: #00d2ff;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
             width: 100vw;
@@ -23,19 +23,20 @@
 
         .hud-panel {
             position: absolute;
-            border: 1px solid rgba(0, 255, 204, 0.3);
-            background: rgba(14, 14, 14, 0.8);
+            border: 1px solid rgba(0, 210, 255, 0.4);
+            background: rgba(5, 5, 10, 0.85);
             padding: 10px 15px;
             font-size: 12px;
             letter-spacing: 1px;
             z-index: 10;
             pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
         }
 
         #top-left { top: 20px; left: 20px; }
         #top-right { top: 20px; right: 20px; text-align: right; }
         
-        /* Video della webcam in background con specchiatura corretta */
+        /* Video webcam in background sfumato */
         .input_video {
             position: absolute;
             top: 0;
@@ -44,7 +45,7 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(-1);
-            opacity: 0.3;
+            opacity: 0.25;
             z-index: 1;
         }
 
@@ -58,92 +59,55 @@
             z-index: 2;
         }
 
-        /* Cursore corretto che segue l'indice senza invertirsi */
-        #custom-cursor {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            border: 2px solid #00ffcc;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 20;
-            transition: background-color 0.1s, transform 0.1s;
-            box-shadow: 0 0 10px #00ffcc;
-        }
-
-        #custom-cursor.pinched {
-            background-color: #ff0055;
-            border-color: #ff0055;
-            transform: translate(-50%, -50%) scale(0.6);
-            box-shadow: 0 0 15px #ff0055;
-        }
-
-        /* Box interattivo centrale */
-        .interactive-box {
+        /* Sfera di Energia Energetica (Cursed Energy Orb) */
+        #energy-orb {
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
-            width: 240px;
-            height: 120px;
-            border: 1px dashed rgba(0, 255, 204, 0.6);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            font-size: 13px;
-            z-index: 5;
-            background: rgba(0, 255, 204, 0.05);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
             pointer-events: none;
-            transition: all 0.3s ease;
+            z-index: 15;
+            transition: all 0.2s ease-out;
+            box-shadow: 0 0 30px #00d2ff, inset 0 0 20px #ffffff;
+            background: radial-gradient(circle, #ffffff 0%, #00d2ff 60%, #0044ff 100%);
         }
 
-        /* Pannello segreto che si sblocca dopo il click */
-        #secret-panel {
+        /* Testo descrittivo della tecnica attiva */
+        #technique-display {
             position: absolute;
-            top: 65%;
+            bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
-            width: 300px;
-            padding: 15px;
-            border: 1px solid #ff0055;
-            background: rgba(255, 0, 85, 0.1);
-            color: #ff0055;
-            font-size: 12px;
+            font-size: 18px;
+            letter-spacing: 3px;
+            color: #00d2ff;
+            text-shadow: 0 0 10px #00d2ff;
+            z-index: 20;
             text-align: center;
-            z-index: 5;
-            display: none; /* Nascosto finché non fai il pinch */
-            box-shadow: 0 0 20px rgba(255, 0, 85, 0.3);
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
     <div id="top-left" class="hud-panel">
-        SYSTEM: ONLINE<br>
-        STATUS: <span id="status-text" style="color: #ff0055;">WAITING FOR HAND...</span>
+        TECHNIQUE: <span id="tech-name" style="color: #00d2ff;">INFINITY (MUKAGEN)</span><br>
+        STATUS: <span id="status-text" style="color: #ff3366;">SEARCHING...</span>
     </div>
 
     <div id="top-right" class="hud-panel">
-        GESTURE: <span id="gesture-state" style="color: #00ffcc;">IDLE</span><br>
-        COORD_X: <span id="coord-x">0</span> | COORD_Y: <span id="coord-y">0</span>
+        JUJUTSU LEVEL: SPECIAL GRADE<br>
+        ENERGY: <span id="energy-level" style="color: #00d2ff;">STABLE</span>
     </div>
 
-    <!-- Box interattivo -->
-    <div class="interactive-box" id="target-box">
-        TARGET ZONE<br><br>[ PINCH TO UNLOCK ]
-    </div>
+    <!-- Sfera di energia evocata -->
+    <div id="energy-orb"></div>
 
-    <!-- Pannello che appare dopo l'interazione -->
-    <div id="secret-panel">
-        ACCESS GRANTED!<br>
-        > PROTOCOL_LOADED: SUCCESS<br>
-        > WELCOME TO THE VIBE CODING WORLD
-    </div>
-
-    <div id="custom-cursor"></div>
+    <!-- Nome della tecnica a schermo -->
+    <div id="technique-display">MOSTRA LA MANO PER INIZIARE</div>
 
     <video class="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
@@ -152,16 +116,12 @@
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const cursor = document.getElementById('custom-cursor');
         
         const statusText = document.getElementById('status-text');
-        const gestureState = document.getElementById('gesture-state');
-        const coordXText = document.getElementById('coord-x');
-        const coordYText = document.getElementById('coord-y');
-        const targetBox = document.getElementById('target-box');
-        const secretPanel = document.getElementById('secret-panel');
-
-        let isUnlocked = false;
+        const techName = document.getElementById('tech-name');
+        const energyLevel = document.getElementById('energy-level');
+        const energyOrb = document.getElementById('energy-orb');
+        const techniqueDisplay = document.getElementById('technique-display');
 
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
@@ -175,70 +135,86 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                statusText.innerText = "HAND DETECTED";
-                statusText.style.color = "#00ffcc";
+                statusText.innerText = "ACTIVE";
+                statusText.style.color = "#00d2ff";
 
                 const landmarks = results.multiHandLandmarks[0];
 
-                // Disegna le lineette della mano
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 204, 0.6)', lineWidth: 2});
-                drawLandmarks(canvasCtx, landmarks, {color: '#ff0055', lineWidth: 1, radius: 3});
+                // DISEGNO PERSONALIZZATO: Linee azzurre/blu e nodi bianchi (stile Gojo)
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 210, 255, 0.6)', lineWidth: 3});
+                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 1, radius: 4});
 
                 const indexFinger = landmarks[8];
                 const thumb = landmarks[4];
+                const pinky = landmarks[20]; // Usato per calcolare l'apertura totale della mano
 
-                // CORRETTO: Invertito l'asse X (1 - x) per far coincidere il cursore specchiato con il video
+                // Coordinate dello schermo basate sull'indice
                 const x = (1 - indexFinger.x) * window.innerWidth;
                 const y = indexFinger.y * window.innerHeight;
 
-                coordXText.innerText = Math.round(x);
-                coordYText.innerText = Math.round(y);
-
-                // Muovi il cursore
-                cursor.style.left = `${x}px`;
-                cursor.style.top = `${y}px`;
-
-                // Rilevamento Pinch
-                const distance = Math.hypot(
+                // Calcolo della distanza tra pollice e indice (Pinch -> Rosso)
+                const pinchDistance = Math.hypot(
                     indexFinger.x - thumb.x,
                     indexFinger.y - thumb.y
                 );
 
-                const boxRect = targetBox.getBoundingClientRect();
-                const isInsideBox = (x >= boxRect.left && x <= boxRect.right && y >= boxRect.top && y <= boxRect.bottom);
+                // Calcolo della distanza indice-mignolo (Mano aperta vs Chiusa)
+                const handSpread = Math.hypot(
+                    indexFinger.x - pinky.x,
+                    indexFinger.y - pinky.y
+                );
 
-                if (distance < 0.05) {
-                    cursor.classList.add('pinched');
-                    gestureState.innerText = "PINCHING";
-                    gestureState.style.color = "#ff0055";
+                // Posiziona la sfera di energia sul dito indice
+                energyOrb.style.left = `${x}px`;
+                energyOrb.style.top = `${y}px`;
 
-                    // Se fai il pinch dentro la target zone, sblocchi il pannello segreto!
-                    if (isInsideBox && !isUnlocked) {
-                        isUnlocked = true;
-                        targetBox.style.backgroundColor = "rgba(255, 0, 85, 0.2)";
-                        targetBox.style.borderColor = "#ff0055";
-                        targetBox.style.color = "#ff0055";
-                        targetBox.innerHTML = "TARGET UNLOCKED<br><br>[ ACCESS ACTIVE ]";
-                        secretPanel.style.display = "block"; // Mostra il pannello segreto!
-                    }
-                } else {
-                    cursor.classList.remove('pinched');
-                    gestureState.innerText = "TRACKING";
-                    gestureState.style.color = "#00ffcc";
+                if (pinchDistance < 0.05) {
+                    // --- TECNICA MALEDETTA: ROSSA (AKA - Aka) ---
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(1.5)";
+                    energyOrb.style.boxShadow = "0 0 50px #ff0033, inset 0 0 25px #ffffff";
+                    energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #ff0033 60%, #880011 100%)";
                     
-                    if (!isUnlocked) {
-                        targetBox.style.backgroundColor = "rgba(0, 255, 204, 0.05)";
-                        targetBox.style.borderColor = "rgba(0, 255, 204, 0.6)";
-                        targetBox.style.color = "#00ffcc";
-                    }
+                    techName.innerText = "REVERSE CT: RED (AKA)";
+                    techName.style.color = "#ff0033";
+                    energyLevel.innerText = "REPEL";
+                    techniqueDisplay.innerText = "🔴 TECNICA MALEDETTA: ROSSA";
+                    techniqueDisplay.style.color = "#ff0033";
+                    techniqueDisplay.style.textShadow = "0 0 15px #ff0033";
+
+                } else if (handSpread > 0.35) {
+                    // --- TECNICA IMMAGINARIA: VIOLA (Murasaki) - Mano aperta grande ---
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(2.8)";
+                    energyOrb.style.boxShadow = "0 0 70px #b000ff, inset 0 0 35px #ffffff";
+                    energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #b000ff 50%, #440088 100%)";
+                    
+                    techName.innerText = "IMAGINARY: PURPLE (MURASAKI)";
+                    techName.style.color = "#b000ff";
+                    energyLevel.innerText = "MAXIMUM OUTPUT";
+                    techniqueDisplay.innerText = "🟣 TECNICA IMMAGINARIA: VIOLA";
+                    techniqueDisplay.style.color = "#b000ff";
+                    techniqueDisplay.style.textShadow = "0 0 20px #b000ff";
+
+                } else {
+                    // --- TECNICA MALEDETTA: BLU (Ao) - Stato standard ---
+                    energyOrb.style.transform = "translate(-50%, -50%) scale(1)";
+                    energyOrb.style.boxShadow = "0 0 35px #00d2ff, inset 0 0 20px #ffffff";
+                    energyOrb.style.background = "radial-gradient(circle, #ffffff 0%, #00d2ff 60%, #0044ff 100%)";
+                    
+                    techName.innerText = "CURSED TECHNIQUE: BLUE (AO)";
+                    techName.style.color = "#00d2ff";
+                    energyLevel.innerText = "ATTRACT";
+                    techniqueDisplay.innerText = "🔵 TECNICA MALEDETTA: BLU";
+                    techniqueDisplay.style.color = "#00d2ff";
+                    techniqueDisplay.style.textShadow = "0 0 10px #00d2ff";
                 }
 
             } else {
-                statusText.innerText = "WAITING FOR HAND...";
-                statusText.style.color = "#ff0055";
-                gestureState.innerText = "IDLE";
-                coordXText.innerText = "0";
-                coordYText.innerText = "0";
+                statusText.innerText = "LOST";
+                statusText.style.color = "#ff3366";
+                techName.innerText = "INFINITY (MUKAGEN)";
+                energyOrb.style.transform = "translate(-50%, -50%) scale(0)";
+                techniqueDisplay.innerText = "MOSTRA LA MANO PER INIZIARE";
+                techniqueDisplay.style.color = "#00d2ff";
             }
             canvasCtx.restore();
         }
@@ -250,8 +226,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.6
+            minDetectionConfidence: 0.65,
+            minTrackingConfidence: 0.65
         });
 
         hands.onResults(onResults);
